@@ -113,6 +113,26 @@ delete, send or quit (⌘⇧⌫, ⌘⌫, ⌘⏎, ⌘Q…), and controls whose la
 never-press list (Empty Trash, Delete, Send, Pay, Purchase, Erase). The HUD
 shows every step and Stop interrupts the turn.
 
+## Privacy guard
+
+`ClickyPrivacy` (a pure Swift target) holds the rules; `PrivacyMonitor` in the
+app feeds it live signals. Every path that observes the screen or the user
+asks it first:
+
+- Talk mode harvests the accessibility tree, asks the guard, and only then
+  captures the screen. Withheld turns send no screenshot and no elements; the
+  backend tells the model the screen was withheld and why.
+- Computer-use tools are denied while secure keyboard entry is on, for any
+  target window whose app or title is protected, and `clipboard_read` always.
+- Spoken/typed questions, model replies, agent text and tool outputs are run
+  through `PrivacyGuard.redact` (one-time codes, Luhn-valid card numbers,
+  spelled-out passwords/PINs) before being sent, shown or saved.
+- Logs carry sizes and reasons only.
+
+Rules are checked by `swift run privacy-checks` (Command Line Tools ship no
+XCTest). Protected apps: fixed list of password managers, authenticators,
+keychain, wallet, banking and payment apps, plus a user list in Setup.
+
 ## Talk mode on this machine
 
 Talk mode degrades by permission: without Screen Recording the backend gets no

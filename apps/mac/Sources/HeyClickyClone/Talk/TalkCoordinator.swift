@@ -1,10 +1,13 @@
 import AppKit
+import ClickyPrivacy
 
 /// Talk mode: hold the hotkey, speak, get an answer read aloud and pointed at.
 ///
-/// Hold begins   -> capture screen + accessibility tree, open voice session, stream mic
+/// Hold begins   -> harvest the accessibility tree, ask the privacy guard, capture
+///                  the screen only if allowed; open voice session, stream mic
 /// Hold ends     -> commit audio, wait for the transcript
-/// Transcript    -> POST /v1/chat with screenshot + elements
+/// Transcript    -> redact codes, POST /v1/chat with screenshot + elements (or a
+///                  "screen withheld" note)
 /// Answer        -> HUD reply card, pointer overlay, Realtime reads it aloud
 @MainActor
 final class TalkCoordinator {
@@ -15,22 +18,25 @@ final class TalkCoordinator {
     private let notch: NotchViewModel
     private let backend: BackendClient
     private let overlay: PointingOverlayManager
+    private let privacy: PrivacyMonitor
     private let voice = RealtimeVoiceClient()
     private let audio = VoiceAudioEngine()
 
     private struct Context {
         var shot: ScreenCapture.Shot?
         var harvest: AXHarvest
+        var withheld: PrivacyGuard.Reason?
     }
     private var contextTask: Task<Context, Never>?
     private var transcriptContinuation: CheckedContinuation<String, Error>?
     private var history: [BackendClient.HistoryTurn] = []
     private var turnTask: Task<Void, Never>?
 
-    init(notch: NotchViewModel, backend: BackendClient, overlay: PointingOverlayManager) {
+    init(notch: NotchViewModel, backend: BackendClient, overlay: PointingOverlayManager, privacy: PrivacyMonitor) {
         self.notch = notch
         self.backend = backend
         self.overlay = overlay
+        self.privacy = privacy
         wireVoice()
     }
 
@@ -41,7 +47,7 @@ final class TalkCoordinator {
         phase = .listening
         notch.set(.listening)
         overlay.hide()
-        contextTask = Task { await Self.captureContext() }
+        contextTask = Task { await self.captureContext() }
 
         Task { @MainActor in
             do {
@@ -91,7 +97,7 @@ final class TalkCoordinator {
         if phase != .idle { cancel() }
         phase = .thinking
         notch.set(.thinking)
-        contextTask = Task { await Self.captureContext() }
+        contextTask = Task { await self.captureContext() }
         turnTask = Task { @MainActor in await runTurn(transcript: text) }
     }
 
@@ -109,29 +115,40 @@ final class TalkCoordinator {
 
     // MARK: - The turn
 
-    private func runTurn(transcript: String) async {
-        let context = await contextTask?.value ?? Context(shot: nil, harvest: .empty)
+    private func runTurn(transcript rawTranscript: String) async {
+        // Spoken or typed text may contain a code the user just read out; never forward it.
+        let redaction = PrivacyGuard.redact(rawTranscript)
+        let transcript = redaction.text
+        if redaction.wasRedacted { Log.privacy.info("redacted \(redaction.count) item(s) from the question") }
+
+        let context = await contextTask?.value ?? Context(shot: nil, harvest: .empty, withheld: nil)
         guard !Task.isCancelled else { return }
+        if let reason = context.withheld {
+            notch.set(.notice("Not looking: \(reason.label)"), autoDismissAfter: 2.5)
+            try? await Task.sleep(for: .seconds(1.2))
+        }
         notch.set(.thinking)
         let request = BackendClient.ChatRequest(
             transcript: transcript,
             screenshot: context.shot?.jpegBase64,
             appName: context.harvest.appName,
             elements: context.harvest.elements,
-            history: Array(history.suffix(8))
+            history: Array(history.suffix(8)),
+            screenWithheld: context.withheld?.label
         )
         do {
             let reply = try await backend.chat(request)
             guard !Task.isCancelled else { return }
+            let replyText = PrivacyGuard.redact(reply.text).text
             history.append(.init(role: "user", text: transcript))
-            history.append(.init(role: "assistant", text: reply.text))
+            history.append(.init(role: "assistant", text: replyText))
 
-            notch.set(.reply(reply.text), autoDismissAfter: 12)
-            point(reply, context: context)
+            notch.set(.reply(replyText), autoDismissAfter: 12)
+            if context.withheld == nil { point(reply, context: context) }
 
             if voice.isUsable {
                 phase = .speaking
-                voice.speak(reply.text)
+                voice.speak(replyText)
             } else {
                 phase = .idle
             }
@@ -149,17 +166,26 @@ final class TalkCoordinator {
         }
     }
 
-    // MARK: - Context capture
+    // MARK: - Context capture (guarded)
 
-    private static func captureContext() async -> Context {
-        async let shot: ScreenCapture.Shot? = {
-            do { return try await ScreenCapture.capture() } catch {
-                Log.app.notice("screenshot skipped: \(String(describing: error), privacy: .public)")
-                return nil
-            }
-        }()
+    private func captureContext() async -> Context {
+        // 1. Read the accessibility tree first: it is what the guard judges on.
         let harvest = await Task.detached(priority: .userInitiated) { AccessibilityHarvester.harvestFrontmost() }.value
-        return Context(shot: await shot, harvest: harvest)
+        // 2. Ask the guard before any pixel is captured.
+        let verdict = privacy.assessFrontmost(windowTitle: harvest.windowTitle, urls: harvest.urls, hasSecureField: harvest.hasSecureField)
+        if case .withhold(let reason) = verdict {
+            return Context(shot: nil, harvest: harvest.withheld(), withheld: reason)
+        }
+        // 3. Only now take the screenshot.
+        var shot: ScreenCapture.Shot?
+        do { shot = try await ScreenCapture.capture() } catch {
+            Log.app.notice("screenshot skipped: \(String(describing: error), privacy: .public)")
+        }
+        // 4. Re-check secure input after the capture: a password field may have gained focus meanwhile.
+        if PrivacyMonitor.secureInputActive {
+            return Context(shot: nil, harvest: harvest.withheld(), withheld: .passwordField)
+        }
+        return Context(shot: shot, harvest: harvest, withheld: nil)
     }
 
     // MARK: - Voice plumbing
@@ -167,7 +193,7 @@ final class TalkCoordinator {
     private func wireVoice() {
         voice.onTranscript = { [weak self] text in
             guard let self else { return }
-            Log.app.info("transcript: \(text, privacy: .public)")
+            Log.app.info("transcript received (\(text.count) chars)")
             transcriptContinuation?.resume(returning: text)
             transcriptContinuation = nil
         }

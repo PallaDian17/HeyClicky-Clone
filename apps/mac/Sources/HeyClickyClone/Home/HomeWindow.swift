@@ -34,6 +34,8 @@ struct HomeView: View {
     @ObservedObject private var permissions: PermissionsModel
     @ObservedObject private var notch: NotchViewModel
     @ObservedObject private var computerUse: ComputerUseHost
+    @ObservedObject private var privacy: PrivacyMonitor
+    @State private var newProtectedApp = ""
 
     init(app: AppDelegate) {
         self.app = app
@@ -41,6 +43,7 @@ struct HomeView: View {
         _permissions = ObservedObject(wrappedValue: app.permissions)
         _notch = ObservedObject(wrappedValue: app.notch.model)
         _computerUse = ObservedObject(wrappedValue: app.computerUse)
+        _privacy = ObservedObject(wrappedValue: app.privacy)
     }
 
     var body: some View {
@@ -119,6 +122,36 @@ struct HomeView: View {
                 }
             }
 
+            section("Privacy guard") {
+                Text("Always on. Nothing is captured while a password field is active, in password managers, banking or wallet apps, or on payment, sign-in and verification pages. One-time codes and card numbers are redacted from anything sent or stored. Agents never read the clipboard.")
+                    .font(.callout)
+                HStack(spacing: 8) {
+                    TextField("Add an app name or bundle id to protect", text: $newProtectedApp)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(addProtectedApp)
+                    Button("Add", action: addProtectedApp)
+                        .disabled(newProtectedApp.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if !privacy.userProtectedApps.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(privacy.userProtectedApps, id: \.self) { app in
+                            HStack(spacing: 4) {
+                                Text(app).font(.caption)
+                                Button { privacy.userProtectedApps.removeAll { $0 == app } } label: {
+                                    Image(systemName: "xmark").font(.caption2)
+                                }.buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Capsule().fill(Color.accentColor.opacity(0.2)))
+                        }
+                    }
+                }
+                if let last = privacy.lastWithheld {
+                    Text("Last withheld: \(last.reason.label), \(last.at.formatted(date: .omitted, time: .shortened))")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+
             section("HUD") {
                 HStack(spacing: 8) {
                     Button("Listening") { app.demoHUD(.listening) }
@@ -138,6 +171,13 @@ struct HomeView: View {
         .padding(24)
         .padding(.top, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func addProtectedApp() {
+        let value = newProtectedApp.trimmingCharacters(in: .whitespaces)
+        guard !value.isEmpty, !privacy.userProtectedApps.contains(value) else { return }
+        privacy.userProtectedApps.append(value)
+        newProtectedApp = ""
     }
 
     private var computerUseStatus: String {

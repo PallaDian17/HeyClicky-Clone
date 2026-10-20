@@ -257,9 +257,10 @@ Remaining, re-cut on 2026-10-21 for personal use and UI fidelity:
 4. **Computer use:** embed cua-driver as the `computer-use` MCP server, one-time
    consent gate, destructive-label denylist, the MIT skill docs in context.
    This is what lets the two agents act in native apps like the original.
-4b. **Privacy guard (next, before anything else ships):** the gate in 3.11
-   across talk mode, computer use, dictation, clipboard and logs, with tests
-   that feed it password fields, a checkout page and an SMS code.
+4b. **Privacy guard — done 2026-10-21:** the gate in 3.11 across talk mode,
+   computer use, clipboard and logs (dictation joins when phase 6 builds it),
+   21 rule checks in `swift run privacy-checks`, and live verification on a
+   focused password field, a plain page and an agent read of a sign-in window.
 5. **Home Space and agents, faithful:** the two starter Clickys founded on first
    launch with first-message suggestions; the original's Home layout (icon
    rail, agent cards, cowork transcript with diffs/tables/markdown, output

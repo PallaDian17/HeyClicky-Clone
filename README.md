@@ -5,7 +5,16 @@ HUD, push-to-talk screen-aware voice chat that can draw on the screen, named
 agents that run tasks on the Mac through a bundled Codex runtime and a
 computer-use driver, dictation, and scheduled routines.
 
-Status: **phase 4 — agents can use the computer.** With computer use switched
+Status: **phase 4b — privacy guard is on.** One gate in front of every screen
+and voice path: nothing is captured while a password field is active, in
+password managers, keychain, wallet, banking or payment apps, or on payment,
+sign-in and verification pages; one-time codes, card numbers and spelled-out
+passwords are redacted from anything sent, shown or stored; agents never read
+the clipboard; logs carry sizes and reasons only. Verified live against a
+focused password field, a plain page, and an agent trying to read a sign-in
+window. Rules are checked by `swift run privacy-checks`.
+
+Phase 4 — agents can use the computer. With computer use switched
 on in Setup, each turn gets trycua's `cua-driver` as a `computer-use` MCP
 server: an embedded daemon the app spawns so it inherits the app's
 Accessibility and Screen Recording grants, clicking and typing in native apps

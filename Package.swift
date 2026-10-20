@@ -8,9 +8,23 @@ let package = Package(
         .package(url: "https://github.com/supabase/supabase-swift.git", from: "2.0.0"),
     ],
     targets: [
+        // Pure logic, no AppKit: the privacy gate and its redaction rules.
+        .target(
+            name: "ClickyPrivacy",
+            path: "apps/mac/Sources/ClickyPrivacy"
+        ),
+        // Checks for the privacy gate. An executable rather than a test target
+        // because Command Line Tools ship neither XCTest nor Swift Testing:
+        //   swift run privacy-checks
+        .executableTarget(
+            name: "privacy-checks",
+            dependencies: ["ClickyPrivacy"],
+            path: "apps/mac/Checks/PrivacyChecks"
+        ),
         .executableTarget(
             name: "HeyClickyClone",
             dependencies: [
+                "ClickyPrivacy",
                 .product(name: "Supabase", package: "supabase-swift"),
             ],
             path: "apps/mac/Sources/HeyClickyClone",
@@ -21,6 +35,7 @@ let package = Package(
                 .linkedFramework("Speech"),
                 .linkedFramework("IOKit"),
                 .linkedFramework("AuthenticationServices"),
+                .linkedFramework("Carbon"),
             ]
         ),
     ]

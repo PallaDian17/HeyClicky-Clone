@@ -1,4 +1,5 @@
 import AppKit
+import ClickyPrivacy
 
 /// Drives agents on Claude Code: one headless `claude` process per turn,
 /// resumed by session id, with every event mirrored into the transcript and HUD.
@@ -6,6 +7,7 @@ import AppKit
 final class AgentRuntime: ObservableObject {
     let store: AgentStore
     let computerUse: ComputerUseHost
+    let privacy: PrivacyMonitor
     private let notch: NotchViewModel
     private let model: String?
 
@@ -16,9 +18,10 @@ final class AgentRuntime: ObservableObject {
     private var toolEntries: [String: UUID] = [:]          // tool_use id -> transcript entry
     private var streamingEntry: [UUID: UUID] = [:]         // agent -> streaming assistant entry
 
-    init(store: AgentStore, computerUse: ComputerUseHost, notch: NotchViewModel, model: String?) {
+    init(store: AgentStore, computerUse: ComputerUseHost, privacy: PrivacyMonitor, notch: NotchViewModel, model: String?) {
         self.store = store
         self.computerUse = computerUse
+        self.privacy = privacy
         self.notch = notch
         self.model = model
     }
@@ -44,7 +47,11 @@ final class AgentRuntime: ObservableObject {
 
         let computerUseOn = computerUse.isEnabled && computerUse.isRunning
         var policy = PermissionPolicy(workspace: store.folder(for: agent))
-        policy.computerUse = ComputerUsePolicy(consentGranted: computerUseOn)
+        policy.computerUse = ComputerUsePolicy(
+            consentGranted: computerUseOn,
+            assessTarget: privacy.targetAssessor(),
+            secureInputActive: { PrivacyMonitor.secureInputActive }
+        )
         let runner = ClaudeCodeRunner(policy: policy)
         runners[agentID] = runner
         if computerUseOn { store.installComputerUseSkill(for: agent, from: ComputerUseHost.skillDirectory) }
@@ -107,14 +114,15 @@ final class AgentRuntime: ObservableObject {
             }
         case .textDelta(let delta):
             if let entryID = streamingEntry[agentID] {
-                mutate(agentID, entry: entryID) { $0.text += delta }
+                mutate(agentID, entry: entryID) { $0.text = PrivacyGuard.redact($0.text + delta).text }
             } else {
                 let entry = TranscriptEntry(role: .assistant, text: delta, streaming: true)
                 streamingEntry[agentID] = entry.id
                 append(entry, to: agentID)
                 notch.set(.agent(name: agent.name, step: "Writing…"))
             }
-        case .assistantText(let text):
+        case .assistantText(let raw):
+            let text = PrivacyGuard.redact(raw).text
             if let entryID = streamingEntry[agentID] {
                 mutate(agentID, entry: entryID) { $0.text = text; $0.streaming = false }
                 streamingEntry[agentID] = nil
@@ -128,7 +136,8 @@ final class AgentRuntime: ObservableObject {
             append(entry, to: agentID)
             notch.set(.agent(name: agent.name, step: summary))
             Log.agents.debug("tool \(name, privacy: .public): \(summary, privacy: .public)")
-        case .toolFinished(let id, let output, let isError):
+        case .toolFinished(let id, let rawOutput, let isError):
+            let output = PrivacyGuard.redact(rawOutput).text
             if let entryID = toolEntries[id] {
                 mutate(agentID, entry: entryID) {
                     $0.streaming = false
@@ -139,7 +148,7 @@ final class AgentRuntime: ObservableObject {
         case .permissionDecided(let tool, let allowed, let reason):
             if !allowed { append(.init(role: .status, text: "Blocked \(tool): \(reason ?? "")"), to: agentID) }
         case .finished(let text, let isError, let sessionID, let cost, let durationMs):
-            finishTurn(agentID: agentID, agent: agent, finalText: text, isError: isError, sessionID: sessionID)
+            finishTurn(agentID: agentID, agent: agent, finalText: PrivacyGuard.redact(text).text, isError: isError, sessionID: sessionID)
             Log.agents.info("turn finished agent=\(agent.slug, privacy: .public) error=\(isError) cost=\(cost ?? 0) ms=\(durationMs ?? 0)")
         case .failed(let message):
             guard runners[agentID] != nil else { return }

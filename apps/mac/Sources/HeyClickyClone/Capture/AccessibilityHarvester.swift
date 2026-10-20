@@ -15,8 +15,17 @@ struct AXElement: Codable, Equatable {
 
 struct AXHarvest {
     var appName: String?
+    var bundleID: String?
+    var windowTitle: String?
+    var urls: [String] = []            // page URLs seen in the tree (browsers)
+    var hasSecureField = false         // an AXSecureTextField is present
     var elements: [AXElement]
     static let empty = AXHarvest(appName: nil, elements: [])
+
+    /// Same harvest with everything the model should not see removed.
+    func withheld() -> AXHarvest {
+        AXHarvest(appName: appName, bundleID: bundleID, windowTitle: nil, urls: [], hasSecureField: hasSecureField, elements: [])
+    }
 }
 
 /// Walks the frontmost app's focused window and lists elements worth pointing at.
@@ -37,16 +46,22 @@ enum AccessibilityHarvester {
         let appElement = AXUIElementCreateApplication(app.processIdentifier)
         guard let window = copyElement(appElement, kAXFocusedWindowAttribute as CFString)
                 ?? copyElement(appElement, kAXMainWindowAttribute as CFString) else {
-            return AXHarvest(appName: app.localizedName, elements: [])
+            return AXHarvest(appName: app.localizedName, bundleID: app.bundleIdentifier, elements: [])
         }
 
         var out: [AXElement] = []
+        var urls: [String] = []
+        var hasSecureField = false
         var queue: [(AXUIElement, Int)] = [(window, 0)]
         var visited = 0
         while !queue.isEmpty, out.count < limit, visited < 4000 {
             let (element, depth) = queue.removeFirst()
             visited += 1
             let role = stringAttribute(element, kAXRoleAttribute) ?? ""
+            if role == "AXSecureTextField" { hasSecureField = true; continue }
+            if role == "AXWebArea", let url = stringAttribute(element, "AXURL") { urls.append(url) }
+            if role == "AXTextField" || role == "AXComboBox", let value = stringAttribute(element, kAXValueAttribute),
+               value.hasPrefix("http://") || value.hasPrefix("https://") { urls.append(value) }
             if let frame = frame(of: element), frame.width >= 4, frame.height >= 4 {
                 let title = bestTitle(element)
                 if interestingRoles.contains(role), !(role == "AXStaticText" && title.isEmpty) {
@@ -58,8 +73,10 @@ enum AccessibilityHarvester {
                 queue.append(contentsOf: children.map { ($0, depth + 1) })
             }
         }
-        Log.app.info("ax harvest app=\(app.localizedName ?? "?", privacy: .public) elements=\(out.count) visited=\(visited)")
-        return AXHarvest(appName: app.localizedName, elements: out)
+        Log.app.info("ax harvest app=\(app.localizedName ?? "?", privacy: .public) elements=\(out.count) visited=\(visited) secure=\(hasSecureField)")
+        return AXHarvest(appName: app.localizedName, bundleID: app.bundleIdentifier,
+                         windowTitle: stringAttribute(window, kAXTitleAttribute), urls: urls,
+                         hasSecureField: hasSecureField, elements: out)
     }
 
     // MARK: - AX helpers
@@ -82,6 +99,7 @@ enum AccessibilityHarvester {
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success, let value else { return nil }
         if let s = value as? String { return s }
         if let n = value as? NSNumber { return n.stringValue }
+        if let u = value as? URL { return u.absoluteString }
         return nil
     }
 

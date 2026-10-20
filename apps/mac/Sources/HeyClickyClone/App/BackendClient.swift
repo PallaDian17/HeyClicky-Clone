@@ -9,6 +9,8 @@ final class BackendClient {
         var appName: String?
         var elements: [AXElement]
         var history: [HistoryTurn]
+        /// Set when the privacy guard withheld the screen; the backend tells the model why.
+        var screenWithheld: String?
     }
     struct HistoryTurn: Codable { var role: String; var text: String }
     struct Box: Decodable { var x: Double; var y: Double; var w: Double; var h: Double }

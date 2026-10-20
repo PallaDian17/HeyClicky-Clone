@@ -22,6 +22,8 @@ export const ChatRequest = z.object({
     .array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(2000) }))
     .max(12)
     .default([]),
+  /** Present when the app's privacy guard withheld the screen (password field, protected app/page). */
+  screenWithheld: z.string().max(200).optional(),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
 
@@ -62,7 +64,12 @@ export function buildMessages(req: ChatRequest): ChatMessage[] {
     messages.push(h.role === "user" ? { role: "user", content: [{ type: "text", text: h.text }] } : { role: "assistant", content: h.text });
   }
   const parts: Extract<ChatMessage, { role: "user" }>["content"] = [];
-  if (req.screenshot) {
+  if (req.screenWithheld) {
+    parts.push({
+      type: "text",
+      text: `(The screen was deliberately not captured for privacy: ${req.screenWithheld}. Do not guess what is on it. Answer from the question alone, and say in one short clause that you did not look at the screen.)`,
+    });
+  } else if (req.screenshot) {
     parts.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${req.screenshot}`, detail: "high" } });
   } else {
     parts.push({ type: "text", text: "(No screenshot is available for this turn.)" });
@@ -85,7 +92,7 @@ chatRoute.post("/", async (c) => {
     const valid = new Set(req.elements.map((e) => e.id));
     const element_id = value.element_id !== null && valid.has(value.element_id) ? value.element_id : null;
     const box = value.box && [value.box.x, value.box.y, value.box.w, value.box.h].every((n) => n >= 0 && n <= 1) ? value.box : null;
-    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} target=${element_id ?? (box ? "box" : "none")}`);
+    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} target=${element_id ?? (box ? "box" : "none")}`);
     return c.json({ text: value.text, element_id, box, usage });
   } catch (err) {
     const status = err instanceof OpenAIError ? 502 : 500;

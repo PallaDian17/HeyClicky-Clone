@@ -14,9 +14,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         client.tokenProvider = { [weak self] in await self?.auth.accessToken() }
         return client
     }()
-    private(set) lazy var talk = TalkCoordinator(notch: notch.model, backend: backend, overlay: overlay)
+    let privacy = PrivacyMonitor()
+    private(set) lazy var talk = TalkCoordinator(notch: notch.model, backend: backend, overlay: overlay, privacy: privacy)
     let computerUse = ComputerUseHost()
-    private(set) lazy var agents = AgentRuntime(store: AgentStore(), computerUse: computerUse, notch: notch.model, model: config.agentModel)
+    private(set) lazy var agents = AgentRuntime(store: AgentStore(), computerUse: computerUse, privacy: privacy, notch: notch.model, model: config.agentModel)
 
     private var statusBar: StatusBarController!
     private var homeWindow: HomeWindowController?
@@ -162,6 +163,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             Log.computerUse.info("consent=\(self.computerUse.isEnabled) state=\(String(describing: self.computerUse.state), privacy: .public)")
             openHome()
+        case "privacy":
+            // `heyclickyclone://privacy/status` logs what the guard would decide right now (no model call).
+            Task.detached(priority: .userInitiated) {
+                let harvest = AccessibilityHarvester.harvestFrontmost()
+                await MainActor.run {
+                    let front = NSWorkspace.shared.frontmostApplication
+                    let verdict = self.privacy.assessFrontmost(windowTitle: harvest.windowTitle, urls: harvest.urls, hasSecureField: harvest.hasSecureField)
+                    Log.privacy.info("status front=\(front?.localizedName ?? "?", privacy: .public) bundle=\(front?.bundleIdentifier ?? "?", privacy: .public) trusted=\(AXIsProcessTrusted()) secureInput=\(PrivacyMonitor.secureInputActive) title=\(harvest.windowTitle ?? "-", privacy: .public) urls=\(harvest.urls.count) secureField=\(harvest.hasSecureField) elements=\(harvest.elements.count) verdict=\(String(describing: verdict), privacy: .public)")
+                }
+            }
         case "talk":
             // `open "heyclickyclone://talk?text=what%20is%20this"` runs a full typed turn.
             let text = URLComponents(url: url, resolvingAgainstBaseURL: false)?
