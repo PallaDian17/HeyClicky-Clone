@@ -10,6 +10,9 @@ struct AppConfig {
     var backendURL = URL(string: "http://localhost:8787")!
 
     static let appName = "HeyClickyClone"
+    static var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0" }
+    /// Optional `--model` for agent turns; nil lets Claude Code pick its default.
+    var agentModel: String?
 
     static var appSupportDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -38,6 +41,9 @@ struct AppConfig {
         config.supabaseAnonKey = value(env: "SUPABASE_ANON_KEY", plist: "SupabaseAnonKey", json: "supabaseAnonKey")
         if let raw = value(env: "BACKEND_URL", plist: "BackendURL", json: "backendURL"), let url = URL(string: raw) {
             config.backendURL = url
+        }
+        if let model = value(env: "AGENT_MODEL", plist: "AgentModel", json: "agentModel") {
+            config.agentModel = model
         }
         return config
     }

@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return client
     }()
     private(set) lazy var talk = TalkCoordinator(notch: notch.model, backend: backend, overlay: overlay)
+    private(set) lazy var agents = AgentRuntime(store: AgentStore(), notch: notch.model, model: config.agentModel)
 
     private var statusBar: StatusBarController!
     private var homeWindow: HomeWindowController?
@@ -54,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         hotkey.stop()
+        agents.shutdown()
     }
 
     // MARK: - Wiring
@@ -133,6 +135,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             showPermissions()
         case "snapshot":
             handleWindowSnapshotURL(url)
+        case "agent":
+            // `heyclickyclone://agent/new?name=Scout&purpose=...` and `heyclickyclone://agent/send?slug=scout&text=...`
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            func q(_ n: String) -> String? { items.first(where: { $0.name == n })?.value }
+            switch url.lastPathComponent {
+            case "new":
+                _ = try? agents.store.create(name: q("name") ?? "Scout", purpose: q("purpose") ?? "general help on this Mac")
+                openHome()
+            case "send":
+                if let slug = q("slug"), let agent = agents.store.agents.first(where: { $0.slug == slug }) {
+                    agents.send(q("text") ?? "Say hello in one sentence.", to: agent.id)
+                    openHome()
+                }
+            default: break
+            }
         case "talk":
             // `open "heyclickyclone://talk?text=what%20is%20this"` runs a full typed turn.
             let text = URLComponents(url: url, resolvingAgainstBaseURL: false)?

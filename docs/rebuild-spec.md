@@ -5,6 +5,28 @@ This is the plan for building our own version of the product described in
 what the original **does** (observed) from what **we choose** (design). Nothing
 here copies the vendor's code, prompts, art, or keys.
 
+## 0. Decisions on record
+
+- **2026-10-21 — personal use, no billing.** This clone is for one person on
+  their own Mac. Stripe, plans, quotas, the paywall HUD and the referral
+  program are **out of scope** (the lease hook in the model proxy stays as a
+  no-op). Supabase sign-in stays optional: the backend's dev bypass is the
+  normal mode for a single user.
+- **2026-10-21 — match the original's UI.** The goal is a faithful duplicate
+  of HeyClicky's surfaces (notch HUD, Home Space, agent HUD, pointer,
+  onboarding feel). Original-looking mascot art is still required (no copied
+  assets), but layout, flow and behaviour should track the original.
+- **2026-10-21 — no agent limit.** The original's free plan allowed two
+  Clickys; this clone has no cap on the number of agents or on turns. Starter
+  agents are a convenience, not a ceiling.
+- **2026-10-21 — agents run on Claude, through the user's subscription.** The
+  agent runtime is Claude Code in headless streaming mode (the same process
+  the Claude Agent SDK drives), launched per agent by the Mac app with the
+  agent's folder as its working directory. It authenticates with the user's
+  existing Claude login, so no Anthropic or OpenAI key is involved and the
+  backend's model proxy is not used for agents. The vendored Codex runtime
+  from phase 3 is retired (one path wins); talk mode keeps its backend route.
+
 ## 1. Product definition
 
 A menubar macOS app, Sonoma 14.2+, that gives the user:
@@ -157,9 +179,19 @@ Design choices that differ from or simplify the original:
   tutorial with keycap hints. Starter agent squad.
 
 ### 3.9 Billing
-- Plans: Free / Pro / Max with monthly agent-turn quotas and talk quotas;
-  Stripe Checkout + Customer Portal through the backend; paywall HUD on 402
-  with plan cards; referral codes with credit.
+Dropped (see decision 0). Keep the original's behaviour in mind only where it
+shapes UI we are duplicating: the usage ring on the Home rail becomes a plain
+"turns today" counter, and the paywall HUD state is not built.
+
+### 3.10 Starter agents ("the same two Clickys")
+- On first launch, found the user's two agents automatically from a bundled
+  definition file (`apps/mac/Resources/starter-agents.json`: name, purpose,
+  persona notes, first-message suggestions), instead of an empty roster.
+- Their names, purposes and the exact persona wording come from the user's
+  own HeyClicky setup (to be supplied), reproduced in our persona template.
+- Each starts with the three tappable first messages the original shows under
+  a founded Clicky, and the HUD's agent state uses their names and initials.
+- The New Clicky interview (3.3) stays, for agents beyond the starter two.
 
 ## 4. Repo layout (proposed)
 
@@ -174,21 +206,40 @@ HeyClicky-Clone/
 
 ## 5. Phases
 
-1. **Skeleton (week 1–2):** menubar app, notch HUD with states, hotkey tap,
-   permissions flow, Supabase sign-in, backend with `/v1/config` and `/v1/chat`.
-2. **Talk (week 3–4):** ScreenCaptureKit capture, Realtime voice, reply card,
-   pointing overlay, place/image/stock tools.
-3. **Agents (week 5–7):** bundle Codex, app-server client, agent folders +
-   personas, HUD streaming, Home Space transcript, lease metering, Composio.
-4. **Computer use (week 8):** embed cua-driver, consent gate, denylist, skill
-   docs in context.
-5. **Dictation + routines (week 9):** Deepgram, insertion with verification,
-   dictionary, routine registry and scheduler.
-6. **Polish + billing (week 10–11):** onboarding, character editor (our own
-   mascot), Stripe, Sparkle, Sentry/PostHog, referral.
+Done (2026-10-20, each verified live):
+
+1. **Skeleton:** menubar app, notch HUD with states, hotkey tap, permissions
+   flow, Supabase sign-in, backend with `/v1/config` and `/v1/chat`.
+2. **Talk:** ScreenCaptureKit capture, Realtime voice, reply card, pointing
+   overlay. (Place/image/stock reply cards deferred to phase 5.)
+3. **Agents:** vendored Codex (app-server + code-mode host), app-server client,
+   agent folders + personas, HUD streaming, Home Space transcript, model proxy.
+
+Remaining, re-cut on 2026-10-21 for personal use and UI fidelity:
+
+4. **Computer use:** embed cua-driver as the `computer-use` MCP server, one-time
+   consent gate, destructive-label denylist, the MIT skill docs in context.
+   This is what lets the two agents act in native apps like the original.
+5. **Home Space and agents, faithful:** the two starter Clickys founded on first
+   launch with first-message suggestions; the original's Home layout (icon
+   rail, agent cards, cowork transcript with diffs/tables/markdown, output
+   preview column, file drop, suggestions page); agent HUD with artifact pile
+   and follow-up voice plate; New Clicky interview; thread resume; talk-to-
+   agent handoff; place/image/stock reply cards.
+6. **Dictation and routines:** Deepgram streaming with backend token, paste
+   with verification, learned dictionary and its notch surface; routine
+   registry, due-queue, run markers, morning suggestions notch.
+7. **Integrations:** Composio MCP session for the agents' Gmail/Notion/… plus
+   custom OAuth connectors in settings.
+8. **Polish, personal edition:** onboarding (voice picker, skill picker, intro,
+   tutorial, permission guide), original mascot + character editor, Sparkle
+   updates, crash reporting. No Stripe, paywall or referral.
 
 ## 6. Open decisions
 
+- **The two agents to duplicate:** their names, what each does, and any
+  standing notes, as they exist in the user's HeyClicky today (a screenshot of
+  the Home Space sidebar plus each agent's purpose line is enough).
 - Mascot and brand (must be original).
 - Whether talk mode uses OpenAI Realtime for both STT+TTS (simplest, matches
   original) or a separate STT → LLM → TTS chain (cheaper, more control).

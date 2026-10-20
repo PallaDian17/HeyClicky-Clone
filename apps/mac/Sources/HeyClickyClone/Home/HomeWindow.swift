@@ -7,15 +7,16 @@ final class HomeWindowController {
 
     init(app: AppDelegate) {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
-            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: 920, height: 620),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "HeyClicky Clone"
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: HomeView(app: app))
+        window.minSize = NSSize(width: 760, height: 480)
+        window.contentView = NSHostingView(rootView: HomeSpaceView(app: app))
         window.center()
     }
 
@@ -121,7 +122,7 @@ struct HomeView: View {
         }
         .padding(24)
         .padding(.top, 8)
-        .frame(width: 560, height: 520)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {

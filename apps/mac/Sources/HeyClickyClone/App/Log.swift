@@ -7,4 +7,5 @@ enum Log {
     static let hotkey = Logger(subsystem: subsystem, category: "hotkey")
     static let permissions = Logger(subsystem: subsystem, category: "permissions")
     static let auth = Logger(subsystem: subsystem, category: "auth")
+    static let agents = Logger(subsystem: subsystem, category: "agents")
 }

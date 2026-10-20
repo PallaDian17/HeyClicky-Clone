@@ -5,19 +5,23 @@ HUD, push-to-talk screen-aware voice chat that can draw on the screen, named
 agents that run tasks on the Mac through a bundled Codex runtime and a
 computer-use driver, dictation, and scheduled routines.
 
-Status: **phase 2 — talk mode works end to end.** Hold the hotkey, speak, and
-the app captures the screen and accessibility tree, transcribes through OpenAI
-Realtime, asks the backend, shows the answer in the notch HUD, reads it aloud,
-and draws a blue pointer around the element it is talking about. Phase 1 gave
-it the menubar app, HUD states, hotkey gestures, permissions window, and
-Supabase sign-in.
+Status: **phase 3 — agents ("Clickys") run real tasks on Claude.** The Home
+window has an agent sidebar and a streaming transcript; each Clicky is a folder
+with a `CLAUDE.md` persona, `output/` and `tmp/`, and every turn is a headless
+`claude` process (Claude Code's stream-json mode) resumed by session id, running
+on the user's own Claude login. No API key, no model proxy, no agent limit.
+Phase 2 gave it talk mode: hold the hotkey, speak, and it captures the screen
+and accessibility tree, transcribes through OpenAI Realtime, answers in the
+notch HUD, reads it aloud, and points at the element. Phase 1 gave it the
+menubar app, HUD states, hotkey gestures, permissions window, and Supabase
+sign-in.
 
 ```bash
 # backend (TypeScript, Hono, Node 22)
 cp apps/backend/.env.example apps/backend/.env   # OPENAI_API_KEY, DEV_BYPASS_AUTH=1 for local
 pnpm --dir apps/backend install && pnpm --dir apps/backend dev
 
-# mac app
+# mac app (agents need Claude Code installed and logged in: `claude auth login`)
 cp .env.example .env    # Supabase URL + anon key, BACKEND_URL
 scripts/run-app.sh      # build, assemble build/HeyClickyClone.app, launch
 ```

@@ -59,6 +59,33 @@ If `pnpm dev` refuses to start over an "ignored build scripts: esbuild" error,
 run `pnpm approve-builds` once in `apps/backend` (the repo ships a
 `pnpm-workspace.yaml` that allows it, but some pnpm versions still ask).
 
+## Agents (Claude Code runtime)
+
+Agents run on Claude through the user's own Claude login. Each turn, the app
+spawns `claude -p --output-format stream-json --input-format stream-json
+--permission-prompts host --setting-sources project` with the agent's folder as
+the working directory, `--resume <session>` for continuity, and a clean
+environment (HOME, USER, PATH only). Permission prompts come back as
+`control_request` events and are answered by `PermissionPolicy`: anything
+inside the agent folder is allowed, writes elsewhere and a short list of
+destructive shell patterns are denied. `--setting-sources project` keeps the
+user's personal Claude Code hooks, plugins and `apiKeyHelper` out of the agents.
+
+Requirements: Claude Code installed (`~/.local/bin/claude`, Homebrew or
+`/usr/local/bin`) and a live login (`claude auth login`). If `claude auth status`
+reports `authMethod: api_key_helper`, a helper in `~/.claude/settings.json` is
+shadowing the login for your own terminal use; the app ignores it, but a dead
+key there breaks plain `claude` runs.
+
+Each Clicky lives at `~/Library/Application Support/HeyClickyClone/agents/<slug>/`
+with `CLAUDE.md` (persona + dated notes, loaded by Claude Code from cwd),
+`output/`, `tmp/` and a `transcript.json` mirror of the chat.
+
+```bash
+open "heyclickyclone://agent/new?name=Scout&purpose=tidies%20notes"
+open "heyclickyclone://agent/send?slug=scout&text=Create%20output%2Fhi.txt"
+```
+
 ## Talk mode on this machine
 
 Talk mode degrades by permission: without Screen Recording the backend gets no
