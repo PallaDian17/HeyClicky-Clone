@@ -44,6 +44,28 @@ open "heyclickyclone://home"
 open "heyclickyclone://permissions"
 ```
 
+```bash
+open "heyclickyclone://talk?text=What%20is%20this%3F"   # full typed talk turn: capture -> /v1/chat -> HUD + pointer + voice
+```
+
+## Backend
+
+`apps/backend` is a standalone pnpm package (Hono on Node 22, no database yet).
+Copy `.env.example` to `.env` there; `DEV_BYPASS_AUTH=1` accepts unauthenticated
+calls for local work. `pnpm smoke <image.png> "<question>"` hits a running server
+with a real screenshot (one paid chat call plus one Realtime mint).
+
+If `pnpm dev` refuses to start over an "ignored build scripts: esbuild" error,
+run `pnpm approve-builds` once in `apps/backend` (the repo ships a
+`pnpm-workspace.yaml` that allows it, but some pnpm versions still ask).
+
+## Talk mode on this machine
+
+Talk mode degrades by permission: without Screen Recording the backend gets no
+screenshot, without Accessibility it gets no element list, and without the
+Microphone the hold gesture shows a notice instead of listening. The typed
+prompt box (double-tap Control) and the `talk` URL work with none of them.
+
 ## Hotkey gestures
 
 Default modifier is Control. Double-tap opens the prompt box in the HUD;

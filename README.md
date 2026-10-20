@@ -5,15 +5,28 @@ HUD, push-to-talk screen-aware voice chat that can draw on the screen, named
 agents that run tasks on the Mac through a bundled Codex runtime and a
 computer-use driver, dictation, and scheduled routines.
 
-Status: **phase 1 skeleton builds and runs** — menubar app, notch HUD with
-idle / listening / thinking / prompt / reply / agent / notice states, global
-Control double-tap and hold gestures, a permissions window, and Supabase
-email + Google sign-in. No model calls yet.
+Status: **phase 2 — talk mode works end to end.** Hold the hotkey, speak, and
+the app captures the screen and accessibility tree, transcribes through OpenAI
+Realtime, asks the backend, shows the answer in the notch HUD, reads it aloud,
+and draws a blue pointer around the element it is talking about. Phase 1 gave
+it the menubar app, HUD states, hotkey gestures, permissions window, and
+Supabase sign-in.
 
 ```bash
-cp .env.example .env    # Supabase URL + anon key
+# backend (TypeScript, Hono, Node 22)
+cp apps/backend/.env.example apps/backend/.env   # OPENAI_API_KEY, DEV_BYPASS_AUTH=1 for local
+pnpm --dir apps/backend install && pnpm --dir apps/backend dev
+
+# mac app
+cp .env.example .env    # Supabase URL + anon key, BACKEND_URL
 scripts/run-app.sh      # build, assemble build/HeyClickyClone.app, launch
 ```
+
+Backend routes: `POST /v1/chat` (transcript + JPEG screenshot + element list →
+spoken answer + pointer target, strict JSON schema), `POST /v1/realtime/session`
+(mints an ephemeral Realtime client secret), `GET /v1/config`. Requests carry
+the Supabase access token; the server verifies it against the project's JWKS
+or legacy JWT secret.
 
 See [docs/dev-setup.md](docs/dev-setup.md) for the signing-identity trick
 that keeps macOS permissions across rebuilds and the debug URL hooks.

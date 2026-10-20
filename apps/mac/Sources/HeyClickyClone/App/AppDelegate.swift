@@ -8,6 +8,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let permissions = PermissionsModel()
     let notch = NotchWindowManager()
     let hotkey = HotkeyMonitor()
+    let overlay = PointingOverlayManager()
+    private(set) lazy var backend: BackendClient = {
+        let client = BackendClient(baseURL: config.backendURL)
+        client.tokenProvider = { [weak self] in await self?.auth.accessToken() }
+        return client
+    }()
+    private(set) lazy var talk = TalkCoordinator(notch: notch.model, backend: backend, overlay: overlay)
 
     private var statusBar: StatusBarController!
     private var homeWindow: HomeWindowController?
@@ -53,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func wireNotch() {
         notch.model.onPromptSubmitted = { [weak self] text in
-            self?.answerPrompt(text)
+            self?.talk.ask(text)
         }
     }
 
@@ -85,28 +92,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleHotkey(_ event: HotkeyMonitor.Event) {
         switch event {
         case .holdBegan:
-            notch.model.set(.listening)
+            talk.beginHold()
         case .holdEnded:
-            guard notch.model.state == .listening else { return }
-            notch.model.set(.thinking)
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(0.9))
-                guard self.notch.model.state == .thinking else { return }
-                self.notch.model.set(.reply("Heard you. Voice and screen capture land in phase 2; the hotkey, HUD and permissions are wired."), autoDismissAfter: 7)
-            }
+            talk.endHold()
         case .doubleTap:
+            if talk.phase != .idle { talk.cancel() }
             notch.model.toggle(.prompt)
         case .escape:
+            talk.cancel()
             notch.model.collapse()
-        }
-    }
-
-    private func answerPrompt(_ text: String) {
-        notch.model.set(.thinking)
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(0.8))
-            guard self.notch.model.state == .thinking else { return }
-            self.notch.model.set(.reply("You asked: “\(text)”. The model call arrives with the backend in phase 2."), autoDismissAfter: 8)
         }
     }
 
@@ -139,6 +133,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             showPermissions()
         case "snapshot":
             handleWindowSnapshotURL(url)
+        case "talk":
+            // `open "heyclickyclone://talk?text=what%20is%20this"` runs a full typed turn.
+            let text = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "text" })?.value ?? "What am I looking at?"
+            talk.ask(text)
         default:
             break
         }

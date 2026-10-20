@@ -45,6 +45,13 @@
     <string>HeyClicky Clone transcribes your voice when you talk to it.</string>
     <key>NSScreenCaptureUsageDescription</key>
     <string>HeyClicky Clone needs Screen Recording to see your screen when you press the hotkey.</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+    <key>BackendURL</key>
+    <string>__BACKEND_URL__</string>
     <key>SupabaseURL</key>
     <string>__SUPABASE_URL__</string>
     <key>SupabaseAnonKey</key>

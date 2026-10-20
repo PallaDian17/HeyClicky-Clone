@@ -16,6 +16,7 @@ if [[ -f "$ROOT/.env" ]]; then
 fi
 SUPABASE_URL="${SUPABASE_URL:-}"
 SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
+BACKEND_URL="${BACKEND_URL:-http://localhost:8787}"
 
 cd "$ROOT"
 swift build -c "$CONFIG" --product "$APP_NAME"
@@ -35,6 +36,7 @@ sed -e "s|__VERSION__|$VERSION|" \
     -e "s|__BUILD__|$BUILD_NUMBER|" \
     -e "s|__SUPABASE_URL__|$SUPABASE_URL|" \
     -e "s|__SUPABASE_ANON_KEY__|$SUPABASE_ANON_KEY|" \
+    -e "s|__BACKEND_URL__|$BACKEND_URL|" \
     "$ROOT/apps/mac/Bundle/Info.plist" > "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 

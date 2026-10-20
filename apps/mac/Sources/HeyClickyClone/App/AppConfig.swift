@@ -7,6 +7,7 @@ import Foundation
 struct AppConfig {
     var supabaseURL: URL?
     var supabaseAnonKey: String?
+    var backendURL = URL(string: "http://localhost:8787")!
 
     static let appName = "HeyClickyClone"
 
@@ -35,6 +36,9 @@ struct AppConfig {
             config.supabaseURL = URL(string: raw)
         }
         config.supabaseAnonKey = value(env: "SUPABASE_ANON_KEY", plist: "SupabaseAnonKey", json: "supabaseAnonKey")
+        if let raw = value(env: "BACKEND_URL", plist: "BackendURL", json: "backendURL"), let url = URL(string: raw) {
+            config.backendURL = url
+        }
         return config
     }
 

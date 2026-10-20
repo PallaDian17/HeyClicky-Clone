@@ -5,3 +5,6 @@ build/
 *.xcworkspace
 .DS_Store
 .env
+apps/backend/.env
+node_modules/
+dist/

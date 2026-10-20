@@ -45,6 +45,12 @@ final class AuthManager: ObservableObject {
 
     var isConfigured: Bool { client != nil }
 
+    /// Current access token for backend calls, refreshed by the SDK when needed.
+    func accessToken() async -> String? {
+        guard let client else { return nil }
+        return try? await client.auth.session.accessToken
+    }
+
     func start() {
         guard let client, listenTask == nil else { return }
         listenTask = Task { [weak self] in
