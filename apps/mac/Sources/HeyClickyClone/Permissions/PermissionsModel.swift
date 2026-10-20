@@ -106,12 +106,20 @@ final class PermissionsModel: ObservableObject {
     func request(_ kind: Kind) {
         switch kind {
         case .accessibility:
+            // Registers this app (with its current code signature) in TCC and shows the
+            // system prompt; the Settings pane then lists the right entry to switch on.
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            if !AXIsProcessTrustedWithOptions(options) { openSettings(kind) }
+            _ = AXIsProcessTrustedWithOptions(options)
         case .inputMonitoring:
             if IOHIDRequestAccess(kIOHIDRequestTypeListenEvent) == false { openSettings(kind) }
         case .screenRecording:
-            if !CGRequestScreenCaptureAccess() { openSettings(kind) }
+            // Registers the app and prompts once; a later call just returns false, so fall back to Settings.
+            if !CGRequestScreenCaptureAccess() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                    guard let self, self.status(.screenRecording) != .granted else { return }
+                    self.openSettings(kind)
+                }
+            }
         case .microphone:
             AVCaptureDevice.requestAccess(for: .audio) { _ in
                 Task { @MainActor in self.refresh() }

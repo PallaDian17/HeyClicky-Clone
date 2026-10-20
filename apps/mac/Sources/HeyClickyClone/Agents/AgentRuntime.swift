@@ -5,6 +5,7 @@ import AppKit
 @MainActor
 final class AgentRuntime: ObservableObject {
     let store: AgentStore
+    let computerUse: ComputerUseHost
     private let notch: NotchViewModel
     private let model: String?
 
@@ -15,8 +16,9 @@ final class AgentRuntime: ObservableObject {
     private var toolEntries: [String: UUID] = [:]          // tool_use id -> transcript entry
     private var streamingEntry: [UUID: UUID] = [:]         // agent -> streaming assistant entry
 
-    init(store: AgentStore, notch: NotchViewModel, model: String?) {
+    init(store: AgentStore, computerUse: ComputerUseHost, notch: NotchViewModel, model: String?) {
         self.store = store
+        self.computerUse = computerUse
         self.notch = notch
         self.model = model
     }
@@ -40,14 +42,19 @@ final class AgentRuntime: ObservableObject {
         append(.init(role: .user, text: text), to: agentID)
         notch.set(.agent(name: agent.name, step: "Starting…"))
 
-        let runner = ClaudeCodeRunner(policy: PermissionPolicy(workspace: store.folder(for: agent)))
+        let computerUseOn = computerUse.isEnabled && computerUse.isRunning
+        var policy = PermissionPolicy(workspace: store.folder(for: agent))
+        policy.computerUse = ComputerUsePolicy(consentGranted: computerUseOn)
+        let runner = ClaudeCodeRunner(policy: policy)
         runners[agentID] = runner
+        if computerUseOn { store.installComputerUseSkill(for: agent, from: ComputerUseHost.skillDirectory) }
         let options = ClaudeCodeRunner.Options(
             cwd: store.folder(for: agent),
             sessionID: agent.sessionID,
             newSessionID: UUID().uuidString.lowercased(),
             model: model,
-            appendSystemPrompt: Self.turnPreamble(for: agent)
+            appendSystemPrompt: Self.turnPreamble(for: agent, computerUse: computerUseOn),
+            mcpConfigJSON: computerUseOn ? computerUse.mcpConfigJSON : nil
         )
         do {
             try runner.start(prompt: text, options: options) { [weak self] event in
@@ -70,10 +77,20 @@ final class AgentRuntime: ObservableObject {
     }
 
     /// Standing rules every turn carries, on top of the persona in the folder's CLAUDE.md.
-    private static func turnPreamble(for agent: Agent) -> String {
-        """
+    private static func turnPreamble(for agent: Agent, computerUse: Bool) -> String {
+        var text = """
         You are \(agent.name), a helper running inside HeyClicky Clone on this person's Mac. Your working directory is your own folder; its CLAUDE.md holds your persona and dated notes. Keep finished work in output/ and scratch in tmp/. You cannot ask the user questions mid-turn, so make reasonable choices and say what you assumed. Your final message is shown in a small card and may be read aloud: lead with the result in plain words, keep it short, and say what did not work.
         """
+        if computerUse {
+            text += """
+
+
+            You can operate the user's Mac through the computer-use MCP tools (mcp__cua__*), which click and type in native apps in the background without stealing focus. Use only those tools for the screen: the cua-driver command line is blocked and must not be searched for or run. The cua-driver skill in .claude/skills explains the loop: launch_app or list_windows to find the window, get_window_state to read it, act by element_token, then re-read to verify. Prefer files, the shell and the web; use the screen only when nothing else can do the job. Never press controls that delete, send, pay or empty the trash; stop and tell the user when a step needs that.
+            """
+        } else {
+            text += "\n\nComputer use (clicking in apps) is turned off for you right now; if a task needs it, say so and tell the user it can be enabled in Setup."
+        }
+        return text
     }
 
     // MARK: - Events

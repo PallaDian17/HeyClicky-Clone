@@ -15,7 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return client
     }()
     private(set) lazy var talk = TalkCoordinator(notch: notch.model, backend: backend, overlay: overlay)
-    private(set) lazy var agents = AgentRuntime(store: AgentStore(), notch: notch.model, model: config.agentModel)
+    let computerUse = ComputerUseHost()
+    private(set) lazy var agents = AgentRuntime(store: AgentStore(), computerUse: computerUse, notch: notch.model, model: config.agentModel)
 
     private var statusBar: StatusBarController!
     private var homeWindow: HomeWindowController?
@@ -42,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         permissions.refresh()
         auth.start()
+        computerUse.startIfEnabled()
 
         auth.$state
             .receive(on: DispatchQueue.main)
@@ -56,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         hotkey.stop()
         agents.shutdown()
+        computerUse.stop()
     }
 
     // MARK: - Wiring
@@ -150,6 +153,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             default: break
             }
+        case "computer-use":
+            // `heyclickyclone://computer-use/on` | `/off` | `/status`
+            switch url.lastPathComponent {
+            case "on": computerUse.isEnabled = true
+            case "off": computerUse.isEnabled = false
+            default: break
+            }
+            Log.computerUse.info("consent=\(self.computerUse.isEnabled) state=\(String(describing: self.computerUse.state), privacy: .public)")
+            openHome()
         case "talk":
             // `open "heyclickyclone://talk?text=what%20is%20this"` runs a full typed turn.
             let text = URLComponents(url: url, resolvingAgainstBaseURL: false)?

@@ -27,6 +27,19 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
 
+# Vendored cua-driver (vendor/fetch-cua-driver.sh): the computer-use daemon the
+# app spawns in embedded mode, plus the agent skill docs installed per Clicky.
+if [[ -x "$ROOT/vendor/cua/bin/cua-driver" ]]; then
+  mkdir -p "$APP/Contents/Helpers/cua" "$APP/Contents/Resources/cua-skill"
+  # Only code may live under Helpers/ (codesign validates every file there as a
+  # nested code object), so the version stamp goes with the skill docs.
+  cp -R "$ROOT/vendor/cua/bin/." "$APP/Contents/Helpers/cua/"
+  cp "$ROOT/vendor/cua/skill/"*.md "$APP/Contents/Resources/cua-skill/"
+  cp "$ROOT/vendor/cua/VERSION" "$APP/Contents/Resources/cua-skill/VERSION"
+else
+  echo "warning: vendor/cua/bin/cua-driver missing; run vendor/fetch-cua-driver.sh (computer use disabled)" >&2
+fi
+
 # SwiftPM resource bundles, if any target declares resources.
 for b in "$(dirname "$BIN")"/*.bundle; do
   [[ -d "$b" ]] && cp -R "$b" "$APP/Contents/Resources/"

@@ -105,7 +105,9 @@ struct PermissionsView: View {
             case .notDetermined:
                 Button("Allow") { model.request(kind) }
             case .denied:
-                Button("Open Settings") { model.openSettings(kind) }
+                // Request first so TCC registers this exact build, then the user flips it on in Settings.
+                Button("Allow") { model.request(kind) }
+                Button("Settings") { model.openSettings(kind) }.controlSize(.small)
             }
         }
         .padding(12)

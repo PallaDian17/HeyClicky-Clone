@@ -15,20 +15,23 @@ scripts/logs.sh                 # follow the app's unified log
 
 macOS ties Accessibility / Screen Recording / Microphone grants to the app's
 code signature. The default ad-hoc signature changes on every build, so each
-rebuild is a "new" app and the grants are lost. One-time fix: create a
-self-signed code-signing certificate and sign with it.
-
-1. Keychain Access → Certificate Assistant → Create a Certificate…
-   Name `HeyClickyClone Dev`, Identity Type *Self Signed Root*,
-   Certificate Type *Code Signing*.
-2. In Keychain Access, open the certificate → Trust → Code Signing: *Always Trust*.
-3. Export it for the build script:
+rebuild is a "new" app and the grants are lost (the TCC log says "Failed to
+match existing code requirement"). One-time fix, run it yourself because it
+writes to your login keychain and shows one password dialog:
 
 ```bash
-echo 'CODESIGN_IDENTITY="HeyClickyClone Dev"' >> .env
+scripts/make-dev-cert.sh
 ```
 
-The designated requirement now stays stable, so grants survive rebuilds.
+It creates a self-signed code-signing certificate named "HeyClickyClone Dev",
+trusts it for code signing, and sets `CODESIGN_IDENTITY` in `.env`. Rebuild,
+grant the permissions once more, and they persist from then on. If the script
+reports the identity is not yet valid, open Keychain Access → the certificate
+→ Trust → Code Signing: Always Trust.
+
+Stale entries from ad-hoc builds can linger in System Settings; clearing them
+is harmless: `tccutil reset Accessibility com.ashish.heyclickyclone` and
+`tccutil reset ScreenCapture com.ashish.heyclickyclone`.
 
 ## Debug URL hooks (debug builds)
 
@@ -85,6 +88,30 @@ with `CLAUDE.md` (persona + dated notes, loaded by Claude Code from cwd),
 open "heyclickyclone://agent/new?name=Scout&purpose=tidies%20notes"
 open "heyclickyclone://agent/send?slug=scout&text=Create%20output%2Fhi.txt"
 ```
+
+## Computer use (cua-driver)
+
+`vendor/fetch-cua-driver.sh` downloads the pinned trycua `cua-driver` (MIT)
+universal binary, its SDK dylib and cursor theme, plus the agent skill docs,
+checksummed, into `vendor/cua/` (binaries gitignored, skill docs committed).
+The build script bundles them under `Contents/Helpers/cua/` and
+`Contents/Resources/cua-skill/`.
+
+Off by default. Setup → Computer use (or `open "heyclickyclone://computer-use/on"`)
+starts `cua-driver serve --embedded --socket <tmp>/heyclickyclone-cua.sock` as a
+direct child of the app, so it inherits the app's Accessibility and Screen
+Recording grants (trycua's embedding contract; launching it any other way
+would give it its own TCC identity). Every agent turn then gets
+`--mcp-config` with a `cua` server (Claude Code drops one named `computer-use`) that runs `cua-driver mcp
+--embedded --socket …`, a thin stdio proxy to that daemon, and the cua-driver
+skill is installed into the agent's `.claude/skills/`.
+
+`ComputerUsePolicy` answers the `mcp__cua__*` permission prompts:
+denied while consent is off; otherwise allowed except launching System
+Settings, Terminal, Keychain Access, Disk Utility or Passwords, shortcuts that
+delete, send or quit (⌘⇧⌫, ⌘⌫, ⌘⏎, ⌘Q…), and controls whose label is on the
+never-press list (Empty Trash, Delete, Send, Pay, Purchase, Erase). The HUD
+shows every step and Stop interrupts the turn.
 
 ## Talk mode on this machine
 

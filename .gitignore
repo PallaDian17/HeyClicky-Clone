@@ -8,3 +8,4 @@ build/
 apps/backend/.env
 node_modules/
 dist/
+vendor/cua/bin/

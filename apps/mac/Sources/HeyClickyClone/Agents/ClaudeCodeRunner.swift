@@ -14,6 +14,7 @@ final class ClaudeCodeRunner {
         var newSessionID: String          // used when sessionID is nil
         var model: String?                // nil = Claude Code's default
         var appendSystemPrompt: String?
+        var mcpConfigJSON: String?        // --mcp-config, e.g. the computer-use server
     }
 
     enum Event {
@@ -72,6 +73,7 @@ final class ClaudeCodeRunner {
         if let id = options.sessionID { args += ["--resume", id] } else { args += ["--session-id", options.newSessionID] }
         if let model = options.model { args += ["--model", model] }
         if let sys = options.appendSystemPrompt { args += ["--append-system-prompt", sys] }
+        if let mcp = options.mcpConfigJSON { args += ["--mcp-config", mcp, "--strict-mcp-config"] } else { args += ["--strict-mcp-config"] }
 
         process.executableURL = binary
         process.arguments = args
@@ -221,7 +223,30 @@ final class ClaudeCodeRunner {
         case "WebSearch": return "Searching the web: \(input["query"] as? String ?? "")"
         case "WebFetch": return "Reading \(input["url"] as? String ?? "a page")"
         case "TodoWrite": return "Planning…"
-        default: return "Using \(tool)"
+        default:
+            if tool.hasPrefix(ComputerUsePolicy.toolPrefix) {
+                return summarizeComputerUse(String(tool.dropFirst(ComputerUsePolicy.toolPrefix.count)), input: input)
+            }
+            return "Using \(tool)"
+        }
+    }
+
+    private static func summarizeComputerUse(_ name: String, input: [String: Any]) -> String {
+        let app = (input["app"] as? String) ?? (input["bundle_id"] as? String).map { ($0.split(separator: ".").last).map(String.init) ?? $0 }
+        let inApp = app.map { " in \($0)" } ?? ""
+        switch name {
+        case "launch_app": return "Opening \(app ?? "an app")"
+        case "list_apps", "list_windows": return "Looking at open windows"
+        case "get_window_state", "get_app_state", "get_desktop_state": return "Reading the screen\(inApp)"
+        case "click", "double_click", "right_click": return "Clicking\(inApp)"
+        case "type_text", "set_value": return "Typing\(inApp)"
+        case "press_key", "hotkey": return "Pressing keys\(inApp)"
+        case "scroll": return "Scrolling\(inApp)"
+        case "run_steps": return "Working\(inApp)"
+        case "run_script": return "Running a scripted sequence\(inApp)"
+        case "verify_state": return "Checking the result\(inApp)"
+        case "check_permissions", "health_report": return "Checking computer-use access"
+        default: return "Using the computer (\(name))"
         }
     }
 }
@@ -233,6 +258,7 @@ struct PermissionPolicy {
     enum Decision { case allow, deny(String) }
 
     let workspace: URL
+    var computerUse = ComputerUsePolicy(consentGranted: false)
 
     static let deniedShellPatterns: [String] = [
         "rm -rf /", "rm -rf ~", "rm -rf $HOME", "sudo ", "mkfs", "diskutil erase", "> /dev/", ":(){", "shutdown", "reboot",
@@ -240,11 +266,18 @@ struct PermissionPolicy {
     ]
 
     func decide(tool: String, input: [String: Any]) -> Decision {
+        if ComputerUsePolicy.isComputerUse(tool) { return computerUse.decide(tool: tool, input: input) }
         switch tool {
         case "Bash":
             let cmd = (input["command"] as? String ?? "").lowercased()
             if let hit = Self.deniedShellPatterns.first(where: { cmd.contains($0.lowercased()) }) {
                 return .deny("That command is blocked for safety (\(hit.trimmingCharacters(in: .whitespaces))). Use a narrower command or ask the user.")
+            }
+            // The driver may only be reached through the gated MCP tools, never its CLI.
+            if cmd.contains("cua-driver") || cmd.contains("helpers/cua") {
+                return .deny(computerUse.consentGranted
+                    ? "Use the mcp__cua__* tools for screen actions; running the driver from the shell is blocked."
+                    : "Computer use is turned off; the user can enable it in Setup. Running the driver from the shell is blocked.")
             }
             return .allow
         case "Write", "Edit", "MultiEdit", "NotebookEdit":

@@ -33,12 +33,14 @@ struct HomeView: View {
     @ObservedObject private var auth: AuthManager
     @ObservedObject private var permissions: PermissionsModel
     @ObservedObject private var notch: NotchViewModel
+    @ObservedObject private var computerUse: ComputerUseHost
 
     init(app: AppDelegate) {
         self.app = app
         _auth = ObservedObject(wrappedValue: app.auth)
         _permissions = ObservedObject(wrappedValue: app.permissions)
         _notch = ObservedObject(wrappedValue: app.notch.model)
+        _computerUse = ObservedObject(wrappedValue: app.computerUse)
     }
 
     var body: some View {
@@ -104,6 +106,19 @@ struct HomeView: View {
                 }
             }
 
+            section("Computer use") {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Let Clickys click and type in your apps, in the background, without stealing focus.")
+                        Text(computerUseStatus).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: Binding(get: { computerUse.isEnabled }, set: { computerUse.isEnabled = $0 }))
+                        .toggleStyle(.switch)
+                        .disabled(!computerUse.isAvailable)
+                }
+            }
+
             section("HUD") {
                 HStack(spacing: 8) {
                     Button("Listening") { app.demoHUD(.listening) }
@@ -123,6 +138,17 @@ struct HomeView: View {
         .padding(24)
         .padding(.top, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var computerUseStatus: String {
+        guard computerUse.isAvailable else { return "cua-driver is not bundled in this build." }
+        let grants = (permissions.status(.accessibility) == .granted && permissions.status(.screenRecording) == .granted)
+        switch computerUse.state {
+        case .off: return computerUse.isEnabled ? "Starting…" : (grants ? "Off." : "Off. Needs Accessibility and Screen Recording.")
+        case .starting: return "Starting the driver…"
+        case .running: return grants ? "On. Agents get the computer-use tools on their next turn." : "Driver running, but Accessibility or Screen Recording is missing, so actions will fail."
+        case .failed(let m): return m
+        }
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {

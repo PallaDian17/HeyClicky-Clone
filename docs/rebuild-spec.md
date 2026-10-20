@@ -27,6 +27,12 @@ here copies the vendor's code, prompts, art, or keys.
   backend's model proxy is not used for agents. The vendored Codex runtime
   from phase 3 is retired (one path wins); talk mode keeps its backend route.
 
+- **2026-10-21 — privacy guard is a hard requirement.** With screen and voice
+  access, the app must never capture, store, forward or let an agent read
+  transaction pages, one-time codes, or passwords for Google or any other
+  account. This is enforced in code, before any capture leaves the Mac, not by
+  prompt wording. See 3.11.
+
 ## 1. Product definition
 
 A menubar macOS app, Sonoma 14.2+, that gives the user:
@@ -183,6 +189,37 @@ Dropped (see decision 0). Keep the original's behaviour in mind only where it
 shapes UI we are duplicating: the usage ring on the Home rail becomes a plain
 "turns today" counter, and the paywall HUD state is not built.
 
+### 3.11 Privacy guard (sensitive screens, codes and secrets)
+One gate, `PrivacyGuard`, consulted by every path that observes the screen or
+the user: talk-mode screenshots and accessibility harvests, computer-use
+window reads and screenshots, clipboard reads, dictation and voice
+transcripts, and logging.
+
+- **Secure input.** While macOS reports secure keyboard entry (a password
+  field is focused anywhere), no screenshot is taken and no element list is
+  built. Any `AXSecureTextField` in a harvested tree is dropped along with its
+  window's text values.
+- **Protected apps.** Password managers, Keychain Access, Passwords, banking
+  and payment apps, and authenticator apps are never captured, never read by
+  the driver, and never the target of an agent action. Fixed list plus a
+  user-editable one in Setup.
+- **Protected pages.** Browser windows whose URL or title matches payment,
+  checkout, banking, login, 2FA/OTP or account-security patterns are treated
+  like protected apps. Detected from the accessibility tree (URL field, title),
+  so it works without reading page content.
+- **Codes in text.** Transcripts, dictation output, clipboard reads and agent
+  tool results are scanned for one-time codes (4–8 digit sequences near words
+  like code/OTP/verify, SMS-style code messages) and card numbers (Luhn-valid
+  13–19 digit runs); matches are replaced with `[redacted]` before anything
+  is sent to a model or written to disk.
+- **Clipboard.** Agents never get `clipboard_read`; clipboard writes are
+  allowed.
+- **Logs.** No capture bytes, transcripts or tool outputs are ever logged;
+  only sizes and timings.
+- **Visible state.** When the guard blocks a capture, the HUD says so
+  ("not looking: password field / protected app"), and the model receives
+  a plain statement that the screen was withheld, never a blank image.
+
 ### 3.10 Starter agents ("the same two Clickys")
 - On first launch, found the user's two agents automatically from a bundled
   definition file (`apps/mac/Resources/starter-agents.json`: name, purpose,
@@ -220,6 +257,9 @@ Remaining, re-cut on 2026-10-21 for personal use and UI fidelity:
 4. **Computer use:** embed cua-driver as the `computer-use` MCP server, one-time
    consent gate, destructive-label denylist, the MIT skill docs in context.
    This is what lets the two agents act in native apps like the original.
+4b. **Privacy guard (next, before anything else ships):** the gate in 3.11
+   across talk mode, computer use, dictation, clipboard and logs, with tests
+   that feed it password fields, a checkout page and an SMS code.
 5. **Home Space and agents, faithful:** the two starter Clickys founded on first
    launch with first-message suggestions; the original's Home layout (icon
    rail, agent cards, cowork transcript with diffs/tables/markdown, output

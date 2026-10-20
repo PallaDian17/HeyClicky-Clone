@@ -68,6 +68,25 @@ final class AgentStore: ObservableObject {
         try? save()
     }
 
+    /// Copies the bundled cua-driver skill into the agent's project skills so
+    /// Claude Code lists it natively (`.claude/skills/cua-driver/SKILL.md`).
+    func installComputerUseSkill(for agent: Agent, from source: URL?) {
+        guard let source, FileManager.default.fileExists(atPath: source.appendingPathComponent("SKILL.md").path) else { return }
+        let dest = folder(for: agent).appendingPathComponent(".claude/skills/cua-driver", isDirectory: true)
+        let fm = FileManager.default
+        let stamp = dest.appendingPathComponent(".version")
+        let version = (try? String(contentsOf: source.appendingPathComponent("VERSION"), encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "0"
+        if let existing = try? String(contentsOf: stamp, encoding: .utf8), existing == version { return }
+        try? fm.createDirectory(at: dest, withIntermediateDirectories: true)
+        for file in (try? fm.contentsOfDirectory(at: source, includingPropertiesForKeys: nil)) ?? [] where file.pathExtension == "md" {
+            let target = dest.appendingPathComponent(file.lastPathComponent)
+            try? fm.removeItem(at: target)
+            try? fm.copyItem(at: file, to: target)
+        }
+        try? version.write(to: stamp, atomically: true, encoding: .utf8)
+        Log.computerUse.info("installed cua-driver skill \(version, privacy: .public) for \(agent.slug, privacy: .public)")
+    }
+
     // MARK: - Transcript persistence
 
     func loadTranscript(for agent: Agent) -> [TranscriptEntry] {

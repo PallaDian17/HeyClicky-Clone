@@ -5,11 +5,16 @@ HUD, push-to-talk screen-aware voice chat that can draw on the screen, named
 agents that run tasks on the Mac through a bundled Codex runtime and a
 computer-use driver, dictation, and scheduled routines.
 
-Status: **phase 3 — agents ("Clickys") run real tasks on Claude.** The Home
-window has an agent sidebar and a streaming transcript; each Clicky is a folder
-with a `CLAUDE.md` persona, `output/` and `tmp/`, and every turn is a headless
-`claude` process (Claude Code's stream-json mode) resumed by session id, running
-on the user's own Claude login. No API key, no model proxy, no agent limit.
+Status: **phase 4 — agents can use the computer.** With computer use switched
+on in Setup, each turn gets trycua's `cua-driver` as a `computer-use` MCP
+server: an embedded daemon the app spawns so it inherits the app's
+Accessibility and Screen Recording grants, clicking and typing in native apps
+in the background without stealing focus, gated by an in-app policy that
+blocks launching settings/terminal apps, delete/send/quit shortcuts, and
+never-press controls. Phase 3 made agents ("Clickys") run real tasks on Claude:
+each Clicky is a folder with a `CLAUDE.md` persona, `output/` and `tmp/`, and
+every turn is a headless `claude` process resumed by session id on the user's
+own Claude login. No API key, no model proxy, no agent limit.
 Phase 2 gave it talk mode: hold the hotkey, speak, and it captures the screen
 and accessibility tree, transcribes through OpenAI Realtime, answers in the
 notch HUD, reads it aloud, and points at the element. Phase 1 gave it the
@@ -22,6 +27,7 @@ cp apps/backend/.env.example apps/backend/.env   # OPENAI_API_KEY, DEV_BYPASS_AU
 pnpm --dir apps/backend install && pnpm --dir apps/backend dev
 
 # mac app (agents need Claude Code installed and logged in: `claude auth login`)
+vendor/fetch-cua-driver.sh   # pinned cua-driver + skill docs, sha256-verified (computer use)
 cp .env.example .env    # Supabase URL + anon key, BACKEND_URL
 scripts/run-app.sh      # build, assemble build/HeyClickyClone.app, launch
 ```
