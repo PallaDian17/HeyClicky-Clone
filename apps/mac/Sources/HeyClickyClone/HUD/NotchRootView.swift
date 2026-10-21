@@ -132,6 +132,57 @@ struct NotchRootView: View {
             }
             .padding(.top, 8)
             .transition(.opacity)
+        case .dictating(let text):
+            HStack(alignment: .top, spacing: 10) {
+                WaveformBars().padding(.top, 2)
+                Text(text.isEmpty ? "Listening… release ⌥ to insert" : text)
+                    .font(.system(size: 13))
+                    .foregroundStyle(text.isEmpty ? .white.opacity(0.6) : .white)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.top, 8)
+            .transition(.opacity)
+        case .dictated(let text):
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "text.cursor").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.8)).padding(.top, 2)
+                Text(text).font(.system(size: 13)).lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.top, 8)
+            .transition(.opacity)
+        case .suggestions(let cards):
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    EyesView(mood: .happy)
+                    Text("Good morning. A few things your Clickys could do today.")
+                        .font(.system(size: 12, weight: .semibold))
+                    Spacer()
+                    Text("esc").font(.system(size: 10, weight: .medium, design: .rounded))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(.white.opacity(0.12)))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                ForEach(cards) { card in
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(card.title).font(.system(size: 12, weight: .semibold))
+                            Text("\(card.agentName)\(card.everyMinutes != nil ? " · repeats" : ""): \(card.task)")
+                                .font(.system(size: 11)).foregroundStyle(.white.opacity(0.65)).lineLimit(2)
+                        }
+                        Spacer(minLength: 0)
+                        Button("No") { model.onSuggestion?(card, false) }
+                            .buttonStyle(.plain).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.6))
+                        Button("Yes") { model.onSuggestion?(card, true) }
+                            .buttonStyle(.plain).font(.system(size: 11, weight: .bold))
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Capsule().fill(.white.opacity(0.18)))
+                    }
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(.white.opacity(0.06)))
+                }
+            }
+            .padding(.top, 8)
+            .transition(.opacity)
         }
     }
 }

@@ -154,22 +154,64 @@ Design choices that differ from or simplify the original:
   OAuth discovery), developer (model, reasoning effort, runtime diagnostics),
   about/updates.
 
-### 3.5 Dictation
-- Hold a second hotkey; stream mic audio to Deepgram (`nova-3`) with a
-  short-lived token from the backend; Apple Speech as offline fallback.
-- On release: backend cleanup pass (punctuation, personal dictionary,
-  formatting for the focused field type), then insert via pasteboard + ⌘V with
-  verification that the field changed; fall back to AX `set_value`.
-- Learned corrections: when the user edits inserted text within a few seconds,
-  record the diff as a dictionary candidate and show it in the notch.
+### 3.5 Dictation — built 2026-10-21
+- Hold **⌥ Option** alone (≥0.45 s; any other key cancels). The event tap
+  reports `dictationBegan`/`dictationEnded` next to the talk gesture.
+- Before listening: read the focused element over AX. A secure field, secure
+  event input, or a privacy-guard "withhold" verdict for the frontmost app
+  refuses with a notice; no audio is captured. Microphone + Speech permission
+  must be granted (both still "Not asked yet" on this Mac).
+- Transcriber: the backend's `POST /v1/dictation/token` mints a 10-minute
+  Deepgram key when `DEEPGRAM_API_KEY` + `DEEPGRAM_PROJECT_ID` are set
+  (`nova-3`, linear16 @16 kHz over the listen WebSocket); otherwise it answers
+  `{provider:"apple"}` and the app uses `SFSpeechRecognizer`, on-device where
+  supported. No key exists today, so Apple Speech is the live path.
+- On release: `PrivacyGuard.redact` → `POST /v1/dictation/cleanup` (gpt-5.6-sol,
+  strict schema: spoken punctuation, casing, field-aware formatting, the
+  dictionary) → redact again → insert. Cleanup failure inserts the raw text.
+- Insert = pasteboard + synthetic ⌘V (HID event source), polled up to 0.8 s
+  for the field value to contain the text, then the previous clipboard is
+  restored; if the paste did not land, AX `kAXValue` is set directly; with no
+  readable value (web views, terminals) the paste is assumed. Failure copies
+  the text to the clipboard and says so. Verified: both `pasted` and
+  `setDirectly` outcomes into a TextEdit document via `heyclickyclone://dictate?text=`.
+- Learned dictionary: 8 s after an insertion the field is re-read; new
+  capitalised or ≥4-letter tokens the user typed in become dictionary words
+  (`ClickyDictationDictionary`), announced in the notch and editable in Setup.
+- Notch states `dictating(text)` (live transcript) and `dictated(text)`.
 
-### 3.6 Routines and proactive suggestions
-- Routine = `{agent, title, task, every_minutes, paused}` in the backend; the
-  app keeps a due-queue, holds runs while asleep/offline, and runs them as
-  turns in the agent's chat with "report only what is new" context.
-- Proactive sweep (opt-in): once a day the backend scans connected apps for
-  actionable items and returns suggestion cards; approved cards become a
-  routine or a one-off agent task.
+### 3.6 Routines and proactive suggestions — built 2026-10-21
+- Registry: `~/Library/Application Support/HeyClickyClone/routines.json`
+  (`Routine {id, agentID, title, task, everyMinutes, paused, lastRun, nextRun,
+  lastSummary, runCount}`), local only — no backend row.
+- Scheduler: a 30 s timer plus a catch-up on wake; a routine is due when
+  `nextRun` has passed and it is not paused. Held (and re-queued in 60 s) when
+  its agent is mid-turn; held while `NWPathMonitor` says offline. `nextRun`
+  advances from the schedule, not from when the run finished. A failed run
+  retries in 15 min.
+- A run is an ordinary agent turn whose preamble says it is the routine, where
+  to keep its dated note (`tmp/routine-<id>.md`), to report only what changed,
+  and to answer exactly `Nothing new.` otherwise — a quiet result collapses the
+  notch; news shows as a reply card.
+- Agents create routines by ending a reply with
+  `<ROUTINE>{"title","task","every_minutes"}</ROUTINE>`; the runtime strips
+  the tag from the transcript and registers it. Three things had to be closed
+  for this to hold: the CLI's own schedulers (`CronCreate`, `ScheduleWakeup`,
+  the `schedule`/`loop` skills) are passed as `--disallowedTools` and denied
+  again by the permission policy; `launchctl load/bootstrap`, `crontab`,
+  `LaunchAgents` and sleep loops are denied shell patterns (one test turn
+  installed a launchd job before this existed); and `routines.json`,
+  `roster.json` and other Clickys' folders are off limits to the shell.
+- Setup shows the registry with Run now / Pause / Delete; debug routes
+  `heyclickyclone://routine/create|list|run|pause|resume|delete|tick`.
+- Morning suggestions: once a day (first launch or wake between 05:00 and
+  12:00, `ClickySuggestionsShownOn`), `POST /v1/suggestions` gets each
+  Clicky's purpose, last six asks and existing routines and returns ≤3 cards
+  grounded in that history (no integrations yet). The notch `suggestions`
+  state shows Yes/No per card: Yes with `every_minutes` makes a routine and
+  runs it; Yes without sends a one-off task; esc dismisses.
+  `heyclickyclone://suggestions/show` forces a live fetch, `/demo` shows
+  static cards.
 
 ### 3.7 Fast computer-use lane (optional, phase 3)
 - A loopback MCP tool `suggest_action(goal, window)` that sends a projected
@@ -269,9 +311,11 @@ Remaining, re-cut on 2026-10-21 for personal use and UI fidelity:
    screenshot into tmp/handoffs and starts the turn). Still open from the
    original: cowork diff/table blocks, suggestions page, agent HUD artifact
    pile and follow-up voice plate, place/image/stock reply cards.
-6. **Dictation and routines:** Deepgram streaming with backend token, paste
-   with verification, learned dictionary and its notch surface; routine
-   registry, due-queue, run markers, morning suggestions notch.
+6. **Dictation and routines — done 2026-10-21:** hold-⌥ dictation (Apple
+   Speech now, Deepgram when a key is configured), cleanup route, paste-and-
+   verify with AX fallback, learned dictionary with Setup editor; routine
+   registry + scheduler + agent `<ROUTINE>` tag; morning suggestions notch.
+   Not yet exercised with a real microphone (permission not granted).
 7. **Integrations:** Composio MCP session for the agents' Gmail/Notion/… plus
    custom OAuth connectors in settings.
 8. **Polish, personal edition:** onboarding (voice picker, skill picker, intro,

@@ -17,6 +17,11 @@ final class AgentRuntime: ObservableObject {
     private var runners: [UUID: ClaudeCodeRunner] = [:]
     private var toolEntries: [String: UUID] = [:]          // tool_use id -> transcript entry
     private var streamingEntry: [UUID: UUID] = [:]         // agent -> streaming assistant entry
+    private var routineTurns: [UUID: UUID] = [:]           // agent -> routine driving the current turn
+    /// Set by the routine scheduler: (routine id, final text, isError).
+    var onRoutineTurnFinished: ((UUID, String, Bool) -> Void)?
+    /// Set by the app: an agent proposed a routine in its reply.
+    var onRoutineProposed: ((Agent, RoutineProposal) -> Void)?
 
     init(store: AgentStore, computerUse: ComputerUseHost, privacy: PrivacyMonitor, notch: NotchViewModel, model: String?) {
         self.store = store
@@ -40,10 +45,11 @@ final class AgentRuntime: ObservableObject {
 
     // MARK: - Turns
 
-    func send(_ text: String, to agentID: UUID) {
+    func send(_ text: String, to agentID: UUID, routine: Routine? = nil) {
         guard let agent = store.agent(id: agentID), !isRunning(agentID) else { return }
         append(.init(role: .user, text: text), to: agentID)
-        notch.set(.agent(name: agent.name, step: "Starting…"))
+        routineTurns[agentID] = routine?.id
+        notch.set(.agent(name: agent.name, step: routine.map { "Routine: \($0.title)" } ?? "Starting…"))
 
         let computerUseOn = computerUse.isEnabled && computerUse.isRunning
         var policy = PermissionPolicy(workspace: store.folder(for: agent))
@@ -60,7 +66,7 @@ final class AgentRuntime: ObservableObject {
             sessionID: agent.sessionID,
             newSessionID: UUID().uuidString.lowercased(),
             model: model,
-            appendSystemPrompt: Self.turnPreamble(for: agent, computerUse: computerUseOn),
+            appendSystemPrompt: Self.turnPreamble(for: agent, computerUse: computerUseOn, routine: routine),
             mcpConfigJSON: computerUseOn ? computerUse.mcpConfigJSON : nil
         )
         do {
@@ -72,6 +78,7 @@ final class AgentRuntime: ObservableObject {
             let message = (error as? LocalizedError)?.errorDescription ?? "Could not start the agent."
             append(.init(role: .error, text: message), to: agentID)
             notch.set(.notice(message), autoDismissAfter: 6)
+            if let routineID = routineTurns.removeValue(forKey: agentID) { onRoutineTurnFinished?(routineID, message, true) }
         }
     }
 
@@ -84,10 +91,21 @@ final class AgentRuntime: ObservableObject {
     }
 
     /// Standing rules every turn carries, on top of the persona in the folder's CLAUDE.md.
-    private static func turnPreamble(for agent: Agent, computerUse: Bool) -> String {
+    private static func turnPreamble(for agent: Agent, computerUse: Bool, routine: Routine? = nil) -> String {
         var text = """
         You are \(agent.name), a helper running inside HeyClicky Clone on this person's Mac. Your working directory is your own folder; its CLAUDE.md holds your persona and dated notes. Keep finished work in output/ and scratch in tmp/. You cannot ask the user questions mid-turn, so make reasonable choices and say what you assumed. Your final message is shown in a small card and may be read aloud: lead with the result in plain words, keep it short, and say what did not work.
+
+        You have no scheduler of your own, and you must not build or look for one: launchd, cron, crontab, background scripts, sleep loops, the cron/schedule/loop tools and the "schedule" and "loop" skills are all disabled here on purpose (do not load them; do not say scheduling is unavailable). The app runs repeating work for you, and it works. When the user asks for something to happen repeatedly (every morning, hourly, each Monday) or asks to "set up a routine", do NOT run the task now and do NOT write any script; instead end your reply with exactly one tag on its own line:
+        <ROUTINE>{"title":"short name","task":"the exact request to run each time","every_minutes":1440}</ROUTINE>
+        Use minutes: hourly = 60, daily = 1440, weekly = 10080. The app registers it and starts you on that cadence; tell the user it is scheduled.
         """
+        if let routine {
+            text += """
+
+
+            This turn is the routine "\(routine.title)" (\(routine.cadenceLabel)), started by the app on schedule, not by the user typing. Do the task, keep a dated note of what you saw in tmp/routine-\(routine.id.uuidString.prefix(8)).md so the next run can compare, and report ONLY what is new or changed since the last run. If nothing is new, reply with exactly: \(RoutineScheduler.quietReply)
+            """
+        }
         if computerUse {
             text += """
 
@@ -156,11 +174,19 @@ final class AgentRuntime: ObservableObject {
         }
     }
 
-    private func finishTurn(agentID: UUID, agent: Agent, finalText: String, isError: Bool, sessionID: String?) {
+    private func finishTurn(agentID: UUID, agent: Agent, finalText rawFinal: String, isError: Bool, sessionID: String?) {
         runners[agentID] = nil
         streamingEntry[agentID] = nil
+        let routineID = routineTurns.removeValue(forKey: agentID)
         var t = transcript(for: agentID)
         for i in t.indices where t[i].streaming { t[i].streaming = false }
+        // An agent may propose a routine; the tag is for the app, not the card.
+        let extracted = RoutineProposal.extract(from: rawFinal)
+        let finalText = extracted.stripped
+        for i in t.indices where t[i].role == .assistant && t[i].text.contains(RoutineProposal.openTag) {
+            t[i].text = RoutineProposal.extract(from: t[i].text).stripped
+        }
+        if !isError { extracted.proposals.forEach { onRoutineProposed?(agent, $0) } }
         // The result text repeats the last assistant message; only add it when it brings something new.
         let lastAssistant = t.last(where: { $0.role == .assistant })?.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if isError {
@@ -176,10 +202,22 @@ final class AgentRuntime: ObservableObject {
         store.update(updated)
         store.saveTranscript(t, for: updated)
 
+        let summary = finalText.isEmpty ? (lastAssistant ?? "Done.") : finalText
+        if let routineID {
+            onRoutineTurnFinished?(routineID, isError ? finalText : summary, isError)
+            let quiet = summary.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("nothing new")
+            if isError {
+                notch.set(.notice("\(agent.name): \(finalText.prefix(120))"), autoDismissAfter: 8)
+            } else if quiet {
+                notch.collapse()   // a routine with nothing to say stays out of the way
+            } else {
+                notch.set(.reply("\(agent.name): \(summary)"), autoDismissAfter: 15)
+            }
+            return
+        }
         if isError {
             notch.set(.notice("\(agent.name): \(finalText.prefix(120))"), autoDismissAfter: 8)
         } else {
-            let summary = finalText.isEmpty ? (lastAssistant ?? "Done.") : finalText
             notch.set(.reply("\(agent.name): \(summary)"), autoDismissAfter: 12)
         }
     }

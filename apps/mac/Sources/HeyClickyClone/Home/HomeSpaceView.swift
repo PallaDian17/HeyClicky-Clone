@@ -36,6 +36,9 @@ struct HomeSpaceView: View {
         .onReceive(NotificationCenter.default.publisher(for: .homeSpaceNewClicky)) { _ in
             selection = .newClicky
         }
+        .onReceive(NotificationCenter.default.publisher(for: .homeSpaceSetup)) { _ in
+            selection = .setup
+        }
     }
 
     // MARK: - Sidebar
@@ -153,6 +156,7 @@ struct HomeSpaceView: View {
 extension Notification.Name {
     static let homeSpaceSelectAgent = Notification.Name("HomeSpaceSelectAgent")
     static let homeSpaceNewClicky = Notification.Name("HomeSpaceNewClicky")
+    static let homeSpaceSetup = Notification.Name("HomeSpaceSetup")
 }
 
 struct AgentAvatar: View {

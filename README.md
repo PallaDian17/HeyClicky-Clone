@@ -2,10 +2,23 @@
 
 Our own version of a "talk to your Mac" AI buddy: a menubar app with a notch
 HUD, push-to-talk screen-aware voice chat that can draw on the screen, named
-agents that run tasks on the Mac through a bundled Codex runtime and a
-computer-use driver, dictation, and scheduled routines.
+agents that run tasks on the Mac through Claude Code and a computer-use
+driver, dictation, and scheduled routines.
 
-Status: **phase 5 — the Home Space fills out.** Two starter Clickys (Scout and
+Status: **phase 6 — dictation and routines.** Hold ⌥ Option and speak: the
+transcript (Apple Speech on-device, or Deepgram when a key is configured) is
+cleaned up for the field you are in by the backend, pasted with ⌘V, verified
+by re-reading the field (accessibility set-value as the fallback), and words
+you correct right after are learned into a dictionary you can edit in Setup.
+Never into password fields or protected apps. Routines are tasks a Clicky
+repeats on a cadence: ask for "every morning…" and the Clicky ends its reply
+with a `<ROUTINE>` tag the app registers; a scheduler runs due routines while
+the Mac is awake and online, holding when the Clicky is busy, and a run that
+finds nothing new stays quiet. Once a morning the notch offers up to three
+cards of things the Clickys could do today, grounded in their own history;
+Yes makes a routine or a one-off task.
+
+Phase 5 — the Home Space fills out. Two starter Clickys (Scout and
 Desk) are founded on first launch with tappable first asks; a New Clicky page
 runs a short interview that ends in a founded agent with its own persona notes
 and first asks; the transcript renders Markdown; an output column lists what

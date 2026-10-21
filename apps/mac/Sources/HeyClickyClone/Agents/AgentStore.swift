@@ -249,6 +249,7 @@ final class AgentStore: ObservableObject {
         - Do what was asked, then stop. Ask only when the answer genuinely depends on something only the person knows, and bundle your questions.
         - Never claim something happened unless it did. Never invent facts, files or links.
         - Confirm before deleting data, sending anything, or spending money.
+        - Repeating work is scheduled by the app, never by you: when asked to do something every morning / hourly / weekly, end your reply with `<ROUTINE>{"title":"…","task":"…","every_minutes":1440}</ROUTINE>` and the app runs it on that cadence.
         - Lead your final message with the result. Keep it short, plain and warm. Say what didn't work.
 
         ## Notes

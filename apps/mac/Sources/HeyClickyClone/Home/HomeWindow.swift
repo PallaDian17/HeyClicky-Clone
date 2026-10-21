@@ -35,6 +35,9 @@ struct HomeView: View {
     @ObservedObject private var notch: NotchViewModel
     @ObservedObject private var computerUse: ComputerUseHost
     @ObservedObject private var privacy: PrivacyMonitor
+    @ObservedObject private var routines: RoutineStore
+    @ObservedObject private var dictionary: DictationDictionary
+    @State private var newWord = ""
     @State private var newProtectedApp = ""
 
     init(app: AppDelegate) {
@@ -44,6 +47,8 @@ struct HomeView: View {
         _notch = ObservedObject(wrappedValue: app.notch.model)
         _computerUse = ObservedObject(wrappedValue: app.computerUse)
         _privacy = ObservedObject(wrappedValue: app.privacy)
+        _routines = ObservedObject(wrappedValue: app.routines)
+        _dictionary = ObservedObject(wrappedValue: app.dictation.dictionary)
     }
 
     var body: some View {
@@ -105,6 +110,35 @@ struct HomeView: View {
                             .frame(width: 8, height: 8)
                         Text(ready ? "hotkey ready" : "needs Accessibility")
                             .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            section("Dictation") {
+                Text("Hold ⌥ Option, speak, release: the text is cleaned up for the field you are in and pasted there. Never into password fields or protected apps. Words you correct right after are learned.")
+                    .font(.callout)
+                HStack(spacing: 8) {
+                    TextField("Add a name or term speech-to-text gets wrong", text: $newWord)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(addWord)
+                    Button("Add", action: addWord)
+                        .disabled(newWord.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if !dictionary.words.isEmpty {
+                    FlowChips(items: dictionary.words) { word in dictionary.words.removeAll { $0 == word } }
+                }
+            }
+
+            section("Routines") {
+                if routines.routines.isEmpty {
+                    Text("None yet. Ask a Clicky to do something every morning or every hour and it becomes a routine here; the morning cards in the notch can add them too.")
+                        .font(.callout).foregroundStyle(.secondary)
+                } else {
+                    ForEach(routines.routines) { routine in
+                        RoutineRow(routine: routine, agentName: app.agents.store.agent(id: routine.agentID)?.name ?? "?",
+                                   onRun: { routines.runNow(routine.id); app.scheduler.tick() },
+                                   onPause: { routines.setPaused(routine.id, !routine.paused) },
+                                   onDelete: { routines.remove(routine.id) })
                     }
                 }
             }
@@ -191,6 +225,11 @@ struct HomeView: View {
         }
     }
 
+    private func addWord() {
+        dictionary.add(newWord)
+        newWord = ""
+    }
+
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
@@ -198,6 +237,61 @@ struct HomeView: View {
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+        }
+    }
+}
+
+
+// MARK: - Routines + dictionary rows
+
+struct RoutineRow: View {
+    let routine: Routine
+    let agentName: String
+    let onRun: () -> Void
+    let onPause: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(routine.title).font(.callout.weight(.semibold))
+                    Text("· \(agentName) · \(routine.cadenceLabel)").font(.caption).foregroundStyle(.secondary)
+                    if routine.paused { Text("paused").font(.caption2).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(Color.orange.opacity(0.25))) }
+                }
+                Text(routine.task).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text(statusLine).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+            }
+            Spacer()
+            Button("Run now", action: onRun).controlSize(.small)
+            Button(routine.paused ? "Resume" : "Pause", action: onPause).controlSize(.small)
+            Button(role: .destructive, action: onDelete) { Image(systemName: "trash") }.controlSize(.small)
+        }
+    }
+
+    private var statusLine: String {
+        var parts: [String] = []
+        if let last = routine.lastRun { parts.append("last \(last.formatted(date: .abbreviated, time: .shortened))") }
+        parts.append(routine.paused ? "not scheduled" : "next \(routine.nextRun.formatted(date: .abbreviated, time: .shortened))")
+        if let s = routine.lastSummary, !s.isEmpty { parts.append(s) }
+        return parts.joined(separator: " · ")
+    }
+}
+
+struct FlowChips: View {
+    let items: [String]
+    let onRemove: (String) -> Void
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), alignment: .leading)], alignment: .leading, spacing: 6) {
+            ForEach(items, id: \.self) { item in
+                HStack(spacing: 4) {
+                    Text(item).font(.caption).lineLimit(1)
+                    Button { onRemove(item) } label: { Image(systemName: "xmark").font(.caption2) }.buttonStyle(.plain)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background(Capsule().fill(Color.accentColor.opacity(0.2)))
+            }
         }
     }
 }

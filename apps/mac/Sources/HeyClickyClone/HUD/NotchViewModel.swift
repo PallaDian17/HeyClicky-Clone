@@ -9,6 +9,18 @@ enum NotchState: Equatable {
     case reply(String)
     case agent(name: String, step: String)
     case notice(String)
+    case dictating(String)                     // live transcript while Option is held
+    case dictated(String)                      // what was inserted
+    case suggestions([SuggestionCardModel])    // morning cards
+}
+
+struct SuggestionCardModel: Equatable, Identifiable {
+    var id: String { title + agentSlug }
+    var title: String
+    var task: String
+    var agentSlug: String
+    var agentName: String
+    var everyMinutes: Int?
 }
 
 @MainActor
@@ -50,8 +62,19 @@ final class NotchViewModel: ObservableObject {
             return CGSize(width: 440, height: n.height + 60)
         case .notice:
             return CGSize(width: 420, height: n.height + 46)
+        case .dictating(let text):
+            let lines = max(1, min(3, (text.count / 56) + 1))
+            return CGSize(width: 480, height: n.height + 40 + CGFloat(lines) * 18)
+        case .dictated(let text):
+            let lines = max(1, min(3, (text.count / 56) + 1))
+            return CGSize(width: 480, height: n.height + 40 + CGFloat(lines) * 18)
+        case .suggestions(let cards):
+            return CGSize(width: 520, height: n.height + 52 + CGFloat(max(1, cards.count)) * 58)
         }
     }
+
+    /// Set by the app: what to do when a suggestion card is accepted or dismissed.
+    var onSuggestion: ((SuggestionCardModel, Bool) -> Void)?
 
     func set(_ newState: NotchState, autoDismissAfter seconds: TimeInterval? = nil) {
         dismissTask?.cancel()

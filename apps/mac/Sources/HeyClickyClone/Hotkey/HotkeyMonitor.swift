@@ -11,13 +11,17 @@ import CoreGraphics
 /// Requires Accessibility (or Input Monitoring) permission; `start()` throws
 /// until it is granted. Callbacks arrive on the main thread.
 final class HotkeyMonitor {
-    enum Event { case doubleTap, holdBegan, holdEnded, escape }
+    enum Event { case doubleTap, holdBegan, holdEnded, escape, dictationBegan, dictationEnded }
     enum Failure: Error { case tapUnavailable }
 
     var onEvent: ((Event) -> Void)?
+    /// Talk gesture: double-tap / double-tap-and-hold this modifier.
     var modifier: CGEventFlags = .maskControl
+    /// Dictation gesture: hold this modifier alone for longer than `dictationHoldThreshold`.
+    var dictationModifier: CGEventFlags = .maskAlternate
     var doubleTapWindow: TimeInterval = 0.35
     var holdThreshold: TimeInterval = 0.28
+    var dictationHoldThreshold: TimeInterval = 0.45
 
     private(set) var isRunning = false
     private var tap: CFMachPort?
@@ -28,6 +32,11 @@ final class HotkeyMonitor {
     private var pressCount = 0
     private var holding = false
     private var holdTimer: DispatchWorkItem?
+
+    private var dictationDown = false
+    private var dictating = false
+    private var dictationTimer: DispatchWorkItem?
+    private var dictationCancelled = false
 
     func start() throws {
         guard !isRunning else { return }
@@ -72,12 +81,14 @@ final class HotkeyMonitor {
             if event.getIntegerValueField(.keyboardEventKeycode) == 53 { // Escape
                 emit(.escape)
             } else {
-                // Any other key while the modifier is down means it's a shortcut, not a gesture.
+                // Any other key while a modifier is down means it's a shortcut, not a gesture.
                 pressCount = 0
+                if dictationDown { dictationCancelled = true; dictationTimer?.cancel() }
             }
         case .flagsChanged:
-            let down = event.flags.contains(modifier)
             let allModifiers: CGEventFlags = [.maskCommand, .maskAlternate, .maskShift, .maskControl]
+            handleDictation(flags: event.flags, allModifiers: allModifiers)
+            let down = event.flags.contains(modifier)
             let otherModifiers = allModifiers.subtracting(modifier)
             let others = !event.flags.intersection(otherModifiers).isEmpty
             guard down != modifierDown else { return }
@@ -86,6 +97,32 @@ final class HotkeyMonitor {
             down ? pressed() : released()
         default:
             break
+        }
+    }
+
+    /// Hold the dictation modifier on its own: begins after the threshold, ends on release.
+    private func handleDictation(flags: CGEventFlags, allModifiers: CGEventFlags) {
+        let down = flags.contains(dictationModifier)
+        let others = !flags.intersection(allModifiers.subtracting(dictationModifier)).isEmpty
+        guard down != dictationDown else { return }
+        dictationDown = down
+        if down {
+            guard !others else { dictationCancelled = true; return }
+            dictationCancelled = false
+            let work = DispatchWorkItem { [weak self] in
+                guard let self, self.dictationDown, !self.dictationCancelled else { return }
+                self.dictating = true
+                self.emit(.dictationBegan)
+            }
+            dictationTimer = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + dictationHoldThreshold, execute: work)
+        } else {
+            dictationTimer?.cancel()
+            dictationTimer = nil
+            if dictating {
+                dictating = false
+                emit(.dictationEnded)
+            }
         }
     }
 

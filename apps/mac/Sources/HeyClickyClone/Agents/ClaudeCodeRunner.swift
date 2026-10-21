@@ -53,6 +53,10 @@ final class ClaudeCodeRunner {
 
     var isRunning: Bool { process.isRunning }
 
+    static let disallowedTools = ["CronCreate", "CronDelete", "CronList", "ScheduleWakeup", "RemoteTrigger", "Monitor",
+                                  "Skill(schedule)", "Skill(loop)", "Skill(schedule:*)", "Skill(loop:*)"]
+    static let disallowedSkills: Set<String> = ["schedule", "loop"]
+
     func start(prompt: String, options: Options, onEvent: @escaping (Event) -> Void) throws {
         guard let binary = Self.binary else { throw Failure.binaryMissing }
         self.onEvent = onEvent
@@ -69,6 +73,9 @@ final class ClaudeCodeRunner {
             // The agent is a product, not the user's dev setup: ignore personal
             // hooks, plugins and (notably) any apiKeyHelper in ~/.claude/settings.json.
             "--setting-sources", "project",
+            // Scheduling belongs to the app's routine registry (the <ROUTINE> tag), not to a
+            // cron that dies with this process. Keep the CLI's own schedulers out of reach.
+            "--disallowedTools", Self.disallowedTools.joined(separator: ","),
         ]
         if let id = options.sessionID { args += ["--resume", id] } else { args += ["--session-id", options.newSessionID] }
         if let model = options.model { args += ["--model", model] }
@@ -263,15 +270,32 @@ struct PermissionPolicy {
     static let deniedShellPatterns: [String] = [
         "rm -rf /", "rm -rf ~", "rm -rf $HOME", "sudo ", "mkfs", "diskutil erase", "> /dev/", ":(){", "shutdown", "reboot",
         "launchctl unload", "killall ", "osascript", "defaults write", "git push --force",
+        // Scheduling belongs to the app's routine registry: no launchd, cron or background loops.
+        "launchctl load", "launchctl bootstrap", "launchctl enable", "launchctl kickstart", "launchctl submit",
+        "crontab", "launchagents", "launchdaemons", "nohup ", "while true", "sleep 3600",
     ]
 
     func decide(tool: String, input: [String: Any]) -> Decision {
         if ComputerUsePolicy.isComputerUse(tool) { return computerUse.decide(tool: tool, input: input) }
+        if tool == "Skill", let name = (input["skill"] as? String ?? input["command"] as? String)?.lowercased(),
+           ClaudeCodeRunner.disallowedSkills.contains(where: { name == $0 || name.hasPrefix($0 + " ") || name.hasPrefix($0 + ":") }) {
+            return .deny("That skill is disabled here. To repeat a task, end your reply with a <ROUTINE>{...}</ROUTINE> tag; the app runs it on that cadence.")
+        }
+        if ClaudeCodeRunner.disallowedTools.contains(tool) {
+            return .deny("Scheduling tools are blocked. To repeat a task, end your reply with a <ROUTINE>{...}</ROUTINE> tag and the app will run it on that cadence.")
+        }
         switch tool {
         case "Bash":
             let cmd = (input["command"] as? String ?? "").lowercased()
             if let hit = Self.deniedShellPatterns.first(where: { cmd.contains($0.lowercased()) }) {
                 return .deny("That command is blocked for safety (\(hit.trimmingCharacters(in: .whitespaces))). Use a narrower command or ask the user.")
+            }
+            // The app's own data (the roster, the routine registry, other agents' folders) is not the agent's to edit.
+            let dataRoot = AppConfig.appSupportDirectory.standardizedFileURL.path.lowercased()
+            let mine = workspace.standardizedFileURL.path.lowercased()
+            if cmd.contains("routines.json") || cmd.contains("roster.json")
+                || (cmd.contains(dataRoot + "/") && cmd.replacingOccurrences(of: mine, with: "").contains(dataRoot + "/")) {
+                return .deny("Only your own folder is yours. The app's registry and other Clickys' folders are off limits; to schedule work, end your reply with a <ROUTINE>{...}</ROUTINE> tag.")
             }
             // The driver may only be reached through the gated MCP tools, never its CLI.
             if cmd.contains("cua-driver") || cmd.contains("helpers/cua") {

@@ -18,6 +18,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var talk = TalkCoordinator(notch: notch.model, backend: backend, overlay: overlay, privacy: privacy)
     let computerUse = ComputerUseHost()
     private(set) lazy var agents = AgentRuntime(store: AgentStore(), computerUse: computerUse, privacy: privacy, notch: notch.model, model: config.agentModel)
+    private(set) lazy var dictation = DictationController(notch: notch.model, backend: backend, privacy: privacy)
+    let routines = RoutineStore()
+    private(set) lazy var scheduler = RoutineScheduler(store: routines, agents: agents, notch: notch.model)
+    private(set) lazy var suggestions = MorningSuggestions(backend: backend, agents: agents, routines: routines, scheduler: scheduler, notch: notch.model)
 
     private var statusBar: StatusBarController!
     private var homeWindow: HomeWindowController?
@@ -47,6 +51,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         computerUse.startIfEnabled()
         agents.store.foundStarters()
         wireHandoff()
+        wireRoutines()
+        scheduler.start()
+        suggestions.start()
 
         auth.$state
             .receive(on: DispatchQueue.main)
@@ -60,6 +67,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         hotkey.stop()
+        scheduler.stop()
+        dictation.cancel()
         agents.shutdown()
         computerUse.stop()
     }
@@ -104,6 +113,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Agents can propose routines in their replies; the scheduler reports runs with news.
+    private func wireRoutines() {
+        agents.onRoutineProposed = { [weak self] agent, proposal in
+            guard let self else { return }
+            let routine = self.routines.add(agentID: agent.id, title: proposal.title, task: proposal.task, everyMinutes: proposal.every_minutes)
+            self.notch.model.set(.notice("\(agent.name) will run “\(routine.title)” \(routine.cadenceLabel)"), autoDismissAfter: 6)
+        }
+        scheduler.onRoutineRan = { routine, summary in
+            Log.agents.info("routine report '\(routine.title, privacy: .public)': \(summary ?? "nothing new", privacy: .public)")
+        }
+    }
+
     private func wireHotkey() {
         hotkey.onEvent = { [weak self] event in
             self?.handleHotkey(event)
@@ -140,7 +161,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             notch.model.toggle(.prompt)
         case .escape:
             talk.cancel()
+            dictation.cancel()
             notch.model.collapse()
+        case .dictationBegan:
+            guard talk.phase == .idle else { return }
+            dictation.begin()
+        case .dictationEnded:
+            dictation.end()
         }
     }
 
@@ -168,7 +195,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "hud":
             handleDebugHUDURL(url)
         case "home":
+            // `heyclickyclone://home` · `heyclickyclone://home/setup`
             openHome()
+            if url.lastPathComponent == "setup" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { NotificationCenter.default.post(name: .homeSpaceSetup, object: nil) }
+            }
         case "permissions":
             showPermissions()
         case "snapshot":
@@ -228,6 +259,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let text = URLComponents(url: url, resolvingAgainstBaseURL: false)?
                 .queryItems?.first(where: { $0.name == "text" })?.value ?? "What am I looking at?"
             talk.ask(text)
+        case "dictate":
+            // `heyclickyclone://dictate?text=…` runs cleanup + insertion into the focused field without the microphone.
+            // `heyclickyclone://dictate/begin` | `/end` drive the real microphone path.
+            let text = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "text" })?.value
+            switch url.lastPathComponent {
+            case "begin": dictation.begin()
+            case "end": dictation.end()
+            default: dictation.deliverSynthetic(text ?? "hello comma this is a dictation test period")
+            }
+        case "routine":
+            // `heyclickyclone://routine/create?slug=scout&title=…&task=…&every=60` · `/list` · `/run?id=` · `/pause?id=` · `/resume?id=` · `/delete?id=` · `/tick`
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            func q(_ n: String) -> String? { items.first(where: { $0.name == n })?.value }
+            let id = q("id").flatMap(UUID.init(uuidString:))
+            switch url.lastPathComponent {
+            case "create":
+                if let slug = q("slug"), let agent = agents.store.agents.first(where: { $0.slug == slug }) {
+                    let r = routines.add(agentID: agent.id, title: q("title") ?? "Check-in", task: q("task") ?? "Say what time it is.",
+                                         everyMinutes: Int(q("every") ?? "") ?? 60, firstRun: q("now") == "1" ? Date() : nil)
+                    Log.agents.info("routine/create id=\(r.id.uuidString, privacy: .public) next=\(r.nextRun.formatted(), privacy: .public)")
+                    if q("now") == "1" { scheduler.tick() }
+                }
+            case "list":
+                for r in routines.routines {
+                    Log.agents.info("routine \(r.id.uuidString, privacy: .public) '\(r.title, privacy: .public)' \(r.cadenceLabel, privacy: .public) paused=\(r.paused) runs=\(r.runCount) next=\(r.nextRun.formatted(), privacy: .public) last=\(r.lastSummary ?? "-", privacy: .public)")
+                }
+                Log.agents.info("routine/list count=\(self.routines.routines.count)")
+            case "run": if let id { routines.runNow(id); scheduler.tick() }
+            case "pause": if let id { routines.setPaused(id, true) }
+            case "resume": if let id { routines.setPaused(id, false) }
+            case "delete": if let id { routines.remove(id) }
+            case "tick": scheduler.tick()
+            default: break
+            }
+            openHome()
+        case "suggestions":
+            // `heyclickyclone://suggestions/show` asks the backend now (ignores the once-a-day guard); `/demo` shows static cards.
+            switch url.lastPathComponent {
+            case "demo":
+                let agent = agents.store.agents.first
+                suggestions.present([
+                    SuggestionCardModel(title: "Morning inbox sweep", task: "Summarize anything new in output/ since yesterday.", agentSlug: agent?.slug ?? "scout", agentName: agent?.name ?? "Scout", everyMinutes: 1440),
+                    SuggestionCardModel(title: "Tidy the Desktop", task: "List the files on my Desktop older than a week and suggest folders for them.", agentSlug: agent?.slug ?? "scout", agentName: agent?.name ?? "Scout", everyMinutes: nil),
+                ])
+            default:
+                Task { await suggestions.show(force: true) }
+            }
         default:
             break
         }
@@ -273,6 +351,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "reply": notch.model.set(.reply(text ?? "Here's the thing you asked about. Hold the hotkey and I'll point at it."), autoDismissAfter: 8)
         case "agent": notch.model.set(.agent(name: text ?? "Stripe Radar", step: "Reading last week's refunds"))
         case "notice": notch.model.set(.notice(text ?? "Update installed. Clicky restarted."), autoDismissAfter: 5)
+        case "dictating": notch.model.set(.dictating(text ?? ""))
+        case "dictated": notch.model.set(.dictated(text ?? "Hello, this is a dictation test."), autoDismissAfter: 5)
         case "snapshot":
             // Renders the HUD's own content to a PNG (no Screen Recording needed).
             let path = URLComponents(url: url, resolvingAgainstBaseURL: false)?
