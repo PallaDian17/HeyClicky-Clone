@@ -38,6 +38,8 @@ struct HomeView: View {
     @ObservedObject private var routines: RoutineStore
     @ObservedObject private var dictionary: DictationDictionary
     @ObservedObject private var integrations: IntegrationsHost
+    @ObservedObject private var characters: CharacterStore
+    @ObservedObject private var updates: UpdateController
     @State private var newWord = ""
     @State private var newConnectorName = ""
     @State private var newConnectorURL = ""
@@ -55,18 +57,19 @@ struct HomeView: View {
         _routines = ObservedObject(wrappedValue: app.routines)
         _dictionary = ObservedObject(wrappedValue: app.dictation.dictionary)
         _integrations = ObservedObject(wrappedValue: app.integrations)
+        _characters = ObservedObject(wrappedValue: app.characters)
+        _updates = ObservedObject(wrappedValue: app.updates)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 12) {
-                EyesView(mood: .awake)
-                    .scaleEffect(1.4)
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(.black))
+                ClickyCharacterView(character: characters.character, mood: .happy, size: 56)
+                    .padding(4)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(.black))
                 VStack(alignment: .leading, spacing: 2) {
                     Text("HeyClicky Clone").font(.title2.weight(.semibold))
-                    Text("Phase 1: menubar, notch HUD, hotkey, permissions, sign-in")
+                    Text("v\(AppConfig.version) · talk, dictate, Clickys, routines, integrations")
                         .font(.callout).foregroundStyle(.secondary)
                 }
             }
@@ -117,6 +120,36 @@ struct HomeView: View {
                         Text(ready ? "hotkey ready" : "needs Accessibility")
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                }
+            }
+
+            section("Character") {
+                CharacterEditorView(character: $characters.character, compact: true)
+            }
+
+            section("Updates") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(updates.isConfigured ? "Checks once a day through Sparkle." : "This build has no update feed.").font(.callout)
+                        Text(updates.lastResult).font(.caption).foregroundStyle(.secondary)
+                        if updates.isConfigured { Text(updates.feedURL).font(.caption2).foregroundStyle(.tertiary).lineLimit(1) }
+                    }
+                    Spacer()
+                    if updates.isChecking { ProgressView().controlSize(.small) }
+                    Button("Check for Updates…") { app.checkForUpdates() }.disabled(!updates.isConfigured)
+                }
+            }
+
+            section("Crash reports") {
+                let reports = CrashReporter.allReports()
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(reports.isEmpty ? "No crashes recorded." : "\(reports.count) report\(reports.count == 1 ? "" : "s"); newest \(reports.first?.lastPathComponent ?? "")").font(.callout)
+                        Text(CrashReporter.sentryEnabled ? "Sent to Sentry automatically." : "Kept on this Mac only (no SentryDSN in this build).").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([CrashReporter.directory]) }
+                    Button("Welcome tour…") { app.showOnboarding() }
                 }
             }
 

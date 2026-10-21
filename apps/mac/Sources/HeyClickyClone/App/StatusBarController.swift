@@ -4,6 +4,8 @@ import AppKit
 protocol StatusBarActions: AnyObject {
     func openHome()
     func showPermissions()
+    func showOnboarding()
+    func checkForUpdates()
     func showSignIn()
     func signOut()
     func demoHUD(_ state: NotchState)
@@ -48,6 +50,8 @@ final class StatusBarController {
         menu.addItem(.separator())
         menu.addItem(makeItem("Open Home", #selector(openHome), key: "h"))
         menu.addItem(makeItem("Permissions…", #selector(showPermissions)))
+        menu.addItem(makeItem("Welcome tour…", #selector(showOnboarding)))
+        menu.addItem(makeItem("Check for Updates…", #selector(checkForUpdates)))
 
         let demo = NSMenu()
         demo.addItem(makeItem("Listening", #selector(demoListening)))
@@ -82,6 +86,8 @@ final class StatusBarController {
 
     @objc private func openHome() { actions?.openHome() }
     @objc private func showPermissions() { actions?.showPermissions() }
+    @objc private func showOnboarding() { actions?.showOnboarding() }
+    @objc private func checkForUpdates() { actions?.checkForUpdates() }
     @objc private func showSignIn() { actions?.showSignIn() }
     @objc private func signOut() { actions?.signOut() }
     @objc private func quit() { actions?.quit() }

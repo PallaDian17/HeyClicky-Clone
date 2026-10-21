@@ -226,7 +226,7 @@ final class TalkCoordinator {
 
     private func ensureVoice() async throws {
         if voice.isUsable { return }
-        let grant = try await backend.mintRealtimeSession()
+        let grant = try await backend.mintRealtimeSession(voice: OnboardingModel.selectedVoice)
         try await voice.connect(grant: grant)
     }
 

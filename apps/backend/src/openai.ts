@@ -41,7 +41,7 @@ export async function chatJSON<T>(messages: ChatMessage[], schemaName: string, s
 export type RealtimeGrant = { value: string; expires_at: number; session: { model?: string } };
 
 /** Mints a short-lived client secret the Mac app uses to open the Realtime WebSocket. */
-export async function mintRealtimeSecret(instructions: string): Promise<RealtimeGrant> {
+export async function mintRealtimeSecret(instructions: string, voice: string = env.realtimeVoice): Promise<RealtimeGrant> {
   return post<RealtimeGrant>("/realtime/client_secrets", {
     expires_after: { anchor: "created_at", seconds: 600 },
     session: {
@@ -55,7 +55,7 @@ export async function mintRealtimeSecret(instructions: string): Promise<Realtime
           transcription: { model: env.transcriptionModel },
           turn_detection: null,
         },
-        output: { format: { type: "audio/pcm", rate: 24000 }, voice: env.realtimeVoice },
+        output: { format: { type: "audio/pcm", rate: 24000 }, voice },
       },
     },
   });

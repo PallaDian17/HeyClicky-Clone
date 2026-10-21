@@ -20,6 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var agents = AgentRuntime(store: AgentStore(), computerUse: computerUse, privacy: privacy, notch: notch.model, model: config.agentModel)
     private(set) lazy var dictation = DictationController(notch: notch.model, backend: backend, privacy: privacy)
     private(set) lazy var integrations = IntegrationsHost(backend: backend)
+    let characters = CharacterStore()
+    private(set) lazy var updates = UpdateController()
+    private var onboardingWindow: OnboardingWindowController?
     let routines = RoutineStore()
     private(set) lazy var scheduler = RoutineScheduler(store: routines, agents: agents, notch: notch.model)
     private(set) lazy var suggestions = MorningSuggestions(backend: backend, agents: agents, routines: routines, scheduler: scheduler, notch: notch.model)
@@ -32,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        CrashReporter.install()
         Log.app.info("Launched \(Bundle.main.bundleIdentifier ?? "unbundled", privacy: .public)")
 
         NSAppleEventManager.shared().setEventHandler(
@@ -63,8 +67,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] state in self?.authStateChanged(state) }
             .store(in: &cancellables)
 
-        if !permissions.allRequiredGranted {
+        _ = updates
+        NotificationCenter.default.addObserver(forName: .clickyCharacterChanged, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.notch.model.character = ClickyCharacter.loadUser() }
+        }
+
+        if !UserDefaults.standard.bool(forKey: OnboardingWindowController.onboardedKey) {
+            showOnboarding()
+        } else if !permissions.allRequiredGranted {
             showPermissions()
+        }
+        let crashes = CrashReporter.unseenReports()
+        if !crashes.isEmpty {
+            notch.model.set(.notice("Clicky crashed last time (\(crashes.count) report\(crashes.count == 1 ? "" : "s") in Setup)"), autoDismissAfter: 8)
+            Log.app.notice("unseen crash reports: \(crashes.map(\.lastPathComponent).joined(separator: ","), privacy: .public)")
         }
     }
 
@@ -197,6 +213,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             auth.handle(callbackURL: url)
         case "hud":
             handleDebugHUDURL(url)
+        case "onboarding":
+            // `heyclickyclone://onboarding` · `/reset` (forget the flag) · `/step?n=3`
+            if url.lastPathComponent == "reset" { UserDefaults.standard.removeObject(forKey: OnboardingWindowController.onboardedKey) }
+            let n = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "n" })?.value.flatMap(Int.init)
+            showOnboarding(step: n.flatMap(OnboardingModel.Step.init(rawValue:)))
+        case "updates":
+            // `heyclickyclone://updates/check` (Sparkle UI) · `/background` (log only)
+            url.lastPathComponent == "background" ? updates.checkInBackground() : updates.checkForUpdates()
+        case "crash":
+            // `heyclickyclone://crash/test?kind=exception|signal` · `/seen`
+            if url.lastPathComponent == "seen" { CrashReporter.markSeen() } else {
+                let kind = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "kind" })?.value ?? "exception"
+                Log.app.notice("simulating crash kind=\(kind, privacy: .public)")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { CrashReporter.simulate(kind) }
+            }
         case "home":
             // `heyclickyclone://home` · `heyclickyclone://home/setup`
             openHome()
@@ -368,6 +399,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let path = items.first(where: { $0.name == "path" })?.value ?? "/tmp/\(which).png"
         let window: NSWindow?
         switch which {
+        case "onboarding":
+            showOnboarding(); window = onboardingWindow?.window
         case "permissions":
             showPermissions(); window = permissionsWindow?.window
         case "signin":
@@ -424,6 +457,15 @@ extension AppDelegate: StatusBarActions {
         if permissionsWindow == nil { permissionsWindow = PermissionsWindowController(model: permissions) }
         permissionsWindow?.show()
     }
+
+    func showOnboarding() { showOnboarding(step: nil) }
+
+    func showOnboarding(step: OnboardingModel.Step?) {
+        if onboardingWindow == nil { onboardingWindow = OnboardingWindowController(app: self) }
+        onboardingWindow?.show(step: step)
+    }
+
+    func checkForUpdates() { updates.checkForUpdates() }
 
     func showSignIn() {
         guard auth.isConfigured else {

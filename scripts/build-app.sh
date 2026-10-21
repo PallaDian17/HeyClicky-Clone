@@ -17,6 +17,13 @@ fi
 SUPABASE_URL="${SUPABASE_URL:-}"
 SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
 BACKEND_URL="${BACKEND_URL:-http://localhost:8787}"
+# Sparkle: the appcast lives in releases/ on main (make the repo or a releases
+# repo public for raw.githubusercontent.com to serve it). The EdDSA public key
+# pairs with the private key `generate_keys --account HeyClickyClone` put in the
+# login Keychain; the key itself is public and safe to commit.
+SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-https://raw.githubusercontent.com/PallaDian17/HeyClicky-Clone/main/releases/appcast.xml}"
+SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-uAUo9w5XtLfwjIWsfydXl2kmCjO00s9UByJ+/wd/QEM=}"
+SENTRY_DSN="${SENTRY_DSN:-}"
 
 cd "$ROOT"
 swift build -c "$CONFIG" --product "$APP_NAME"
@@ -40,8 +47,21 @@ else
   echo "warning: vendor/cua/bin/cua-driver missing; run vendor/fetch-cua-driver.sh (computer use disabled)" >&2
 fi
 
-# Starter Clickys founded on first launch.
+# Starter Clickys founded on first launch, and the bundled power-up skills.
 cp "$ROOT/apps/mac/Bundle/starter-agents.json" "$APP/Contents/Resources/starter-agents.json"
+cp -R "$ROOT/apps/mac/Bundle/skills" "$APP/Contents/Resources/skills"
+
+# Binary frameworks from SwiftPM artifacts (Sparkle, Sentry) ride in Contents/Frameworks.
+ARTIFACTS="$ROOT/.build/artifacts"
+mkdir -p "$APP/Contents/Frameworks"
+for fw in "$ARTIFACTS/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" \
+          "$ARTIFACTS/sentry-cocoa/Sentry-Dynamic/Sentry-Dynamic.xcframework/macos-arm64_x86_64/Sentry.framework"; do
+  if [[ -d "$fw" ]] && otool -L "$APP/Contents/MacOS/$APP_NAME" | grep -q "$(basename "$fw" .framework).framework"; then
+    rm -rf "$APP/Contents/Frameworks/$(basename "$fw")"
+    cp -R "$fw" "$APP/Contents/Frameworks/"
+  fi
+done
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/$APP_NAME" 2>/dev/null || true
 
 # SwiftPM resource bundles, if any target declares resources.
 for b in "$(dirname "$BIN")"/*.bundle; do
@@ -53,6 +73,9 @@ sed -e "s|__VERSION__|$VERSION|" \
     -e "s|__SUPABASE_URL__|$SUPABASE_URL|" \
     -e "s|__SUPABASE_ANON_KEY__|$SUPABASE_ANON_KEY|" \
     -e "s|__BACKEND_URL__|$BACKEND_URL|" \
+    -e "s|__SPARKLE_FEED_URL__|$SPARKLE_FEED_URL|" \
+    -e "s|__SPARKLE_PUBLIC_KEY__|$SPARKLE_PUBLIC_KEY|" \
+    -e "s|__SENTRY_DSN__|$SENTRY_DSN|" \
     "$ROOT/apps/mac/Bundle/Info.plist" > "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
@@ -61,6 +84,14 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 # For day-to-day development create a self-signed "Code Signing" certificate in
 # Keychain Access and export CODESIGN_IDENTITY="<its name>".
 IDENTITY="${CODESIGN_IDENTITY:--}"
+# Nested code first (Sparkle's XPC services + Autoupdate, Sentry), then the app.
+for fw in "$APP/Contents/Frameworks"/*.framework; do
+  [[ -d "$fw" ]] || continue
+  find "$fw" \( -name "*.xpc" -o -name "*.app" \) -type d -print0 | while IFS= read -r -d '' nested; do
+    codesign --force --sign "$IDENTITY" --options runtime "$nested" 2>/dev/null || codesign --force --sign "$IDENTITY" "$nested"
+  done
+  codesign --force --sign "$IDENTITY" "$fw"
+done
 codesign --force --sign "$IDENTITY" \
   --entitlements "$ROOT/apps/mac/Bundle/Entitlements.plist" \
   "$APP"

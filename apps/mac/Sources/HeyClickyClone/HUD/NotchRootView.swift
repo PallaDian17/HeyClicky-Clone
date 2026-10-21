@@ -44,7 +44,7 @@ struct NotchRootView: View {
         case .idle:
             if model.hovering {
                 HStack(spacing: 10) {
-                    EyesView(mood: .awake)
+                    ClickyCharacterView(character: model.character, mood: .awake, size: 26)
                     Text("double-tap ⌃ to ask · hold ⌃ to talk")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(0.75))
@@ -91,7 +91,7 @@ struct NotchRootView: View {
         case .reply(let text):
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    EyesView(mood: .happy)
+                    ClickyCharacterView(character: model.character, mood: .happy, size: 22)
                     Text("Clicky").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
                     Spacer()
                     Text("esc").font(.system(size: 10, weight: .medium, design: .rounded))

@@ -12,10 +12,11 @@ struct Agent: Codable, Identifiable, Equatable {
     var firstMessages: [String] = []  // tappable starters shown while the chat is empty
     var notes: [String] = []          // durable facts written into the persona at founding
     var isStarter = false
+    var character: ClickyCharacter?      // nil → derived from the slug
 
     var initial: String { String(name.prefix(1)).uppercased() }
 
-    enum CodingKeys: String, CodingKey { case id, slug, name, purpose, createdAt, sessionID, lastActivity, firstMessages, notes, isStarter }
+    enum CodingKeys: String, CodingKey { case id, slug, name, purpose, createdAt, sessionID, lastActivity, firstMessages, notes, isStarter, character }
     init(id: UUID, slug: String, name: String, purpose: String, createdAt: Date, sessionID: String? = nil, lastActivity: Date? = nil,
          firstMessages: [String] = [], notes: [String] = [], isStarter: Bool = false) {
         self.id = id; self.slug = slug; self.name = name; self.purpose = purpose; self.createdAt = createdAt
@@ -33,7 +34,10 @@ struct Agent: Codable, Identifiable, Equatable {
         firstMessages = try c.decodeIfPresent([String].self, forKey: .firstMessages) ?? []
         notes = try c.decodeIfPresent([String].self, forKey: .notes) ?? []
         isStarter = try c.decodeIfPresent(Bool.self, forKey: .isStarter) ?? false
+        character = try c.decodeIfPresent(ClickyCharacter.self, forKey: .character)
     }
+
+    var look: ClickyCharacter { character ?? .derived(from: slug) }
 }
 
 struct TranscriptEntry: Codable, Identifiable, Equatable {
@@ -91,8 +95,8 @@ final class AgentStore: ObservableObject {
         for def in StarterAgentDefinition.loadBundled() {
             if var existing = agents.first(where: { $0.slug == def.slug }) {
                 // An agent with this slug pre-dates the starters: give it the starter's suggestions.
-                if existing.firstMessages.isEmpty {
-                    existing.firstMessages = def.firstMessages
+                if existing.firstMessages.isEmpty || !existing.isStarter {
+                    if existing.firstMessages.isEmpty { existing.firstMessages = def.firstMessages }
                     existing.isStarter = true
                     update(existing)
                 }
@@ -139,6 +143,31 @@ final class AgentStore: ObservableObject {
 
     /// Copies the bundled cua-driver skill into the agent's project skills so
     /// Claude Code lists it natively (`.claude/skills/cua-driver/SKILL.md`).
+    struct BundledSkill { var name: String; var description: String; var url: URL }
+
+    /// Skills shipped in the app bundle (Resources/skills/<name>/SKILL.md).
+    static func bundledSkills() -> [BundledSkill] {
+        guard let root = Bundle.main.resourceURL?.appendingPathComponent("skills", isDirectory: true),
+              let dirs = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { return [] }
+        return dirs.compactMap { dir in
+            let file = dir.appendingPathComponent("SKILL.md")
+            guard let text = try? String(contentsOf: file, encoding: .utf8) else { return nil }
+            let desc = text.split(separator: "\n").first { $0.hasPrefix("description:") }.map { $0.dropFirst("description:".count).trimmingCharacters(in: .whitespaces) } ?? ""
+            return BundledSkill(name: dir.lastPathComponent, description: desc, url: dir)
+        }.sorted { $0.name < $1.name }
+    }
+
+    /// Copies a bundled skill into the agent's .claude/skills/<name>/ (overwrites).
+    func installSkill(named name: String, for agent: Agent) {
+        guard let skill = Self.bundledSkills().first(where: { $0.name == name }) else { return }
+        let dest = folder(for: agent).appendingPathComponent(".claude/skills/\(name)", isDirectory: true)
+        let fm = FileManager.default
+        try? fm.removeItem(at: dest)
+        try? fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? fm.copyItem(at: skill.url, to: dest)
+        Log.agents.info("installed skill \(name, privacy: .public) for \(agent.slug, privacy: .public)")
+    }
+
     func installComputerUseSkill(for agent: Agent, from source: URL?) {
         guard let source, FileManager.default.fileExists(atPath: source.appendingPathComponent("SKILL.md").path) else { return }
         let dest = folder(for: agent).appendingPathComponent(".claude/skills/cua-driver", isDirectory: true)

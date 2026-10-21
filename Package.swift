@@ -6,6 +6,8 @@ let package = Package(
     platforms: [.macOS(.v14)],
     dependencies: [
         .package(url: "https://github.com/supabase/supabase-swift.git", from: "2.0.0"),
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.10.0"),
+        .package(url: "https://github.com/getsentry/sentry-cocoa.git", from: "9.30.0"),
     ],
     targets: [
         // Pure logic, no AppKit: the privacy gate and its redaction rules.
@@ -26,6 +28,8 @@ let package = Package(
             dependencies: [
                 "ClickyPrivacy",
                 .product(name: "Supabase", package: "supabase-swift"),
+                .product(name: "Sparkle", package: "Sparkle"),
+                .product(name: "Sentry", package: "sentry-cocoa"),
             ],
             path: "apps/mac/Sources/HeyClickyClone",
             linkerSettings: [

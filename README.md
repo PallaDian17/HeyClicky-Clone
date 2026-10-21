@@ -5,7 +5,17 @@ HUD, push-to-talk screen-aware voice chat that can draw on the screen, named
 agents that run tasks on the Mac through Claude Code and a computer-use
 driver, dictation, and scheduled routines.
 
-Status: **phase 7 — integrations.** Setup → Integrations has two halves.
+Status: **phase 8 — the personal edition is complete.** First launch runs a
+welcome tour: make the mascot yours (body, eyes, hat, colour; the same rig
+shows in the notch, Home and every Clicky's avatar), pick a voice with live
+previews, choose power-up skills for the starter Clickys, grant permissions,
+check the mic, learn the three gestures, meet the squad. Updates come through
+Sparkle (`scripts/release.sh` cuts a signed appcast); crashes are written to
+Application Support and shown in Setup, with Sentry optional. All eight
+phases of the rebuild spec are built. Not ported on purpose: Stripe, the
+paywall, referrals, and the original's video and skill-catalog assets.
+
+Phase 7 — integrations. Setup → Integrations has two halves.
 Composio toolkits (Gmail, Calendar, Drive, Notion, Slack, GitHub, Linear)
 connect through the backend when `COMPOSIO_API_KEY` is set and reach the
 Clickys as one per-user MCP server. Custom connectors take any remote MCP

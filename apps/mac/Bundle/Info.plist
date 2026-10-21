@@ -50,6 +50,16 @@
         <key>NSAllowsLocalNetworking</key>
         <true/>
     </dict>
+    <key>SUFeedURL</key>
+    <string>__SPARKLE_FEED_URL__</string>
+    <key>SUPublicEDKey</key>
+    <string>__SPARKLE_PUBLIC_KEY__</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
+    <key>SentryDSN</key>
+    <string>__SENTRY_DSN__</string>
     <key>BackendURL</key>
     <string>__BACKEND_URL__</string>
     <key>SupabaseURL</key>

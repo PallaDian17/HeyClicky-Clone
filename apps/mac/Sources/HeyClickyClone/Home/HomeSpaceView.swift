@@ -163,11 +163,8 @@ struct AgentAvatar: View {
     let agent: Agent
     var size: CGFloat
     var body: some View {
-        ZStack {
-            Circle().fill(LinearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
-            Text(agent.initial).font(.system(size: size * 0.46, weight: .bold)).foregroundStyle(.white)
-        }
-        .frame(width: size, height: size)
+        ClickyCharacterView(character: agent.look, mood: .awake, size: size * 1.15, animated: size >= 36)
+            .frame(width: size, height: size)
     }
 }
 

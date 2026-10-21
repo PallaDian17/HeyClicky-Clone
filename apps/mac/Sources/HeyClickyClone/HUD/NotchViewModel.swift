@@ -31,6 +31,7 @@ final class NotchViewModel: ObservableObject {
 
     let geometry: NotchGeometry
     var onPromptSubmitted: ((String) -> Void)?
+    @Published var character: ClickyCharacter = ClickyCharacter.loadUser()
 
     private var dismissTask: Task<Void, Never>?
     private var generation = 0

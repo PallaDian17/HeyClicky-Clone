@@ -219,12 +219,41 @@ Design choices that differ from or simplify the original:
   press/type with confidence. Falls back to the full model under 0.5
   confidence. We can start with a cheap LLM call instead of a trained head.
 
-### 3.8 Onboarding
-- Pre-sign-in: pick a voice (preview clips we generate with our own TTS), pick
-  skills (Hermes catalog, MIT), watch a short intro. Sign in (Supabase email /
-  Google). Permission guide: Accessibility, Screen Recording, Microphone,
-  Speech, with a drag-the-app-into-the-list helper. Mic check. A 60-second
-  tutorial with keycap hints. Starter agent squad.
+### 3.8 Onboarding — built 2026-10-21
+`Onboarding/OnboardingWindow.swift`, shown on first launch (`ClickyOnboarded`
+unset) and from the menu as "Welcome tour…". Nine steps: welcome → character
+editor → voice (ten Realtime voices, previewed through `POST /v1/voice/preview`
+= OpenAI `gpt-4o-mini-tts` MP3; the pick is `ClickyVoice` and rides on
+`/v1/realtime/session {voice}`) → power-ups (the bundled skills in
+`apps/mac/Bundle/skills/`: web-brief, file-tidy, meeting-notes, daily-digest,
+installed into each starter's `.claude/skills/` on finish) → permissions (the
+five kinds with Allow buttons) → mic check (RMS meter, "Heard you") → three
+gestures with "Show me" HUD demos → starter squad → done. No intro video and
+no Hermes catalog: those were the original's assets, not behaviour.
+Debug: `heyclickyclone://onboarding[/reset|/step?n=N]`, `snapshot?window=onboarding`.
+
+### 3.8b Character, updates, crashes — built 2026-10-21
+- **Mascot** (`Character/`): an original vector blob creature, not the
+  original's cloud. `ClickyCharacter {body: blob|cloud|bean|square, eyes:
+  round|tall|sleepy|sparkle, hat: none|tuft|antenna|beanie|halo, colorway ×8,
+  blush}`; one rig (`ClickyCharacterView`) renders the user's character in the
+  notch hover pill and reply header, the Home header, onboarding, and every
+  Clicky's avatar (`Agent.character`, else `derived(from: slug)` so each Clicky
+  looks different without being edited). Editor in onboarding and Setup →
+  Character; "Surprise me" randomises.
+- **Updates**: Sparkle 2.10 via SwiftPM (`Sparkle.framework` copied into
+  Contents/Frameworks and signed by `build-app.sh`). `SUFeedURL` defaults to
+  `releases/appcast.xml` on main via raw.githubusercontent.com — the repo is
+  private, so that URL serves nothing until the repo (or a releases repo) is
+  public; `SUPublicEDKey` is the EdDSA key from `generate_keys --account
+  HeyClickyClone` (private half in the login Keychain). Daily automatic
+  checks; "Check for Updates…" in the menu and Setup. `scripts/release.sh`
+  = release build → zip → `generate_appcast`. Verified against a local feed.
+- **Crash reporting**: `CrashReporter` writes uncaught exceptions and fatal
+  signals to `Application Support/HeyClickyClone/crashes/`, shows a notch
+  notice on the next launch, and lists them in Setup → Crash reports. Sentry
+  (sentry-cocoa 9.30, static) starts only when `SentryDSN` is set at build
+  time and strips message/breadcrumbs before send. `heyclickyclone://crash/test?kind=exception|signal`.
 
 ### 3.9 Billing
 Dropped (see decision 0). Keep the original's behaviour in mind only where it
@@ -361,9 +390,11 @@ Remaining, re-cut on 2026-10-21 for personal use and UI fidelity:
    discovery, registration, PKCE, refresh, a tool probe, and the per-server
    send/delete gate; verified against the bundled mock connector and a real
    agent turn.
-8. **Polish, personal edition:** onboarding (voice picker, skill picker, intro,
-   tutorial, permission guide), original mascot + character editor, Sparkle
-   updates, crash reporting. No Stripe, paywall or referral.
+8. **Polish, personal edition — done 2026-10-21:** onboarding tour (voice
+   picker with previews, power-up picker, permission guide, mic check,
+   gesture tutorial, starter squad), original mascot + character editor on
+   one rig, Sparkle updates with a release script, local crash reports with
+   optional Sentry. No Stripe, paywall or referral, by decision.
 
 ## 6. Open decisions
 

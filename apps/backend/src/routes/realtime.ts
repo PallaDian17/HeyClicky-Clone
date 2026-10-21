@@ -3,19 +3,22 @@ import { env } from "../env.js";
 import { mintRealtimeSecret, OpenAIError } from "../openai.js";
 import { REALTIME_INSTRUCTIONS } from "../prompt.js";
 import type { AuthedUser } from "../auth.js";
+import { VOICES } from "./voice.js";
 
 export const realtimeRoute = new Hono<{ Variables: { user: AuthedUser } }>();
 
 /** Mints an ephemeral client secret; the app connects to the WebSocket itself. */
 realtimeRoute.post("/session", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { voice?: string };
+  const voice = (VOICES as readonly string[]).includes(body.voice ?? "") ? (body.voice as string) : env.realtimeVoice;
   try {
-    const grant = await mintRealtimeSecret(REALTIME_INSTRUCTIONS);
-    console.log(`[realtime] session minted for user=${c.var.user.id} model=${env.realtimeModel}`);
+    const grant = await mintRealtimeSecret(REALTIME_INSTRUCTIONS, voice);
+    console.log(`[realtime] session minted for user=${c.var.user.id} model=${env.realtimeModel} voice=${voice}`);
     return c.json({
       clientSecret: grant.value,
       expiresAt: grant.expires_at,
       model: env.realtimeModel,
-      voice: env.realtimeVoice,
+      voice,
       url: `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(env.realtimeModel)}`,
     });
   } catch (err) {

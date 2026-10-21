@@ -53,8 +53,26 @@ final class BackendClient {
         try await post("v1/chat", body: request)
     }
 
-    func mintRealtimeSession() async throws -> RealtimeGrant {
-        try await post("v1/realtime/session", body: EmptyBody())
+    private struct VoiceBody: Encodable { var voice: String }
+
+    func mintRealtimeSession(voice: String) async throws -> RealtimeGrant {
+        try await post("v1/realtime/session", body: VoiceBody(voice: voice))
+    }
+
+    private struct PreviewBody: Encodable { var voice: String }
+
+    /// MP3 bytes of a short sample in the given voice.
+    func voicePreview(voice: String) async throws -> Data {
+        var req = URLRequest(url: baseURL.appendingPathComponent("v1/voice/preview"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = await tokenProvider() { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.httpBody = try JSONEncoder().encode(PreviewBody(voice: voice))
+        let (data, response) = try await session.data(for: req)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        Log.app.info("POST v1/voice/preview -> \(status) \(data.count) bytes")
+        guard (200..<300).contains(status) else { throw Failure(status: status, body: String(decoding: data, as: UTF8.self)) }
+        return data
     }
 
     func interview(turns: [InterviewTurn], existingNames: [String]) async throws -> InterviewResponse {
