@@ -85,7 +85,31 @@ final class BackendClient {
         return r.cards
     }
 
+    struct IntegrationsCatalog: Decodable { var configured: Bool; var toolkits: [IntegrationsHost.ComposioToolkit]; var error: String? }
+    struct ComposioLink: Decodable { var redirectUrl: String; var connectionRequestId: String }
+    struct ComposioSession: Decodable { var url: String?; var headers: [String: String]; var toolkits: [String] }
+    private struct ConnectBody: Encodable { var toolkit: String }
+    private struct DisconnectBody: Encodable { var connectedAccountId: String }
+    private struct OK: Decodable { var ok: Bool }
+
+    func integrationsCatalog() async throws -> IntegrationsCatalog { try await get("v1/integrations/catalog") }
+    func integrationsConnect(toolkit: String) async throws -> ComposioLink { try await post("v1/integrations/connect", body: ConnectBody(toolkit: toolkit)) }
+    func integrationsDisconnect(connectedAccountId: String) async throws {
+        let _: OK = try await post("v1/integrations/disconnect", body: DisconnectBody(connectedAccountId: connectedAccountId))
+    }
+    func integrationsSession() async throws -> ComposioSession { try await post("v1/integrations/session", body: EmptyBody()) }
+
     private struct EmptyBody: Encodable {}
+
+    private func get<Response: Decodable>(_ path: String) async throws -> Response {
+        var req = URLRequest(url: baseURL.appendingPathComponent(path))
+        if let token = await tokenProvider() { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: req)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        Log.app.info("GET \(path, privacy: .public) -> \(status)")
+        guard (200..<300).contains(status) else { throw Failure(status: status, body: String(decoding: data, as: UTF8.self)) }
+        return try JSONDecoder().decode(Response.self, from: data)
+    }
 
     private func post<Body: Encodable, Response: Decodable>(_ path: String, body: Body) async throws -> Response {
         var req = URLRequest(url: baseURL.appendingPathComponent(path))

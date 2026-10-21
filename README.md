@@ -5,7 +5,18 @@ HUD, push-to-talk screen-aware voice chat that can draw on the screen, named
 agents that run tasks on the Mac through Claude Code and a computer-use
 driver, dictation, and scheduled routines.
 
-Status: **phase 6 — dictation and routines.** Hold ⌥ Option and speak: the
+Status: **phase 7 — integrations.** Setup → Integrations has two halves.
+Composio toolkits (Gmail, Calendar, Drive, Notion, Slack, GitHub, Linear)
+connect through the backend when `COMPOSIO_API_KEY` is set and reach the
+Clickys as one per-user MCP server. Custom connectors take any remote MCP
+server: the app discovers its OAuth metadata, registers itself, signs in with
+PKCE in your browser, keeps the tokens in the Keychain and refreshes them, and
+lists the server's tools. Each turn gets the connected servers as `mcp__…`
+tools; tools that send, delete or pay stay blocked per server until you allow
+them. Verified against a bundled mock connector (`scripts/mock-connector.mjs`)
+with a real agent turn.
+
+Phase 6 — dictation and routines. Hold ⌥ Option and speak: the
 transcript (Apple Speech on-device, or Deepgram when a key is configured) is
 cleaned up for the field you are in by the backend, pasted with ⌘V, verified
 by re-reading the field (accessibility set-value as the fallback), and words

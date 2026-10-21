@@ -15,6 +15,9 @@ final class AgentRuntime: ObservableObject {
     @Published private(set) var modelLabel: String?
 
     private var runners: [UUID: ClaudeCodeRunner] = [:]
+    private var starting: Set<UUID> = []                   // turns gathering their MCP servers
+    /// Set by the app: Composio + custom connectors for each turn.
+    var integrations: IntegrationsHost?
     private var toolEntries: [String: UUID] = [:]          // tool_use id -> transcript entry
     private var streamingEntry: [UUID: UUID] = [:]         // agent -> streaming assistant entry
     private var routineTurns: [UUID: UUID] = [:]           // agent -> routine driving the current turn
@@ -41,16 +44,25 @@ final class AgentRuntime: ObservableObject {
         return loaded
     }
 
-    func isRunning(_ agentID: UUID) -> Bool { runners[agentID] != nil }
+    func isRunning(_ agentID: UUID) -> Bool { runners[agentID] != nil || starting.contains(agentID) }
 
     // MARK: - Turns
 
     func send(_ text: String, to agentID: UUID, routine: Routine? = nil) {
         guard let agent = store.agent(id: agentID), !isRunning(agentID) else { return }
+        starting.insert(agentID)
         append(.init(role: .user, text: text), to: agentID)
         routineTurns[agentID] = routine?.id
         notch.set(.agent(name: agent.name, step: routine.map { "Routine: \($0.title)" } ?? "Starting…"))
+        Task { @MainActor in
+            let turnServers = await integrations?.prepareForTurn() ?? IntegrationsHost.TurnServers()
+            starting.remove(agentID)
+            start(agent: agent, text: text, routine: routine, integrations: turnServers)
+        }
+    }
 
+    private func start(agent: Agent, text: String, routine: Routine?, integrations turn: IntegrationsHost.TurnServers) {
+        let agentID = agent.id
         let computerUseOn = computerUse.isEnabled && computerUse.isRunning
         var policy = PermissionPolicy(workspace: store.folder(for: agent))
         policy.computerUse = ComputerUsePolicy(
@@ -58,16 +70,20 @@ final class AgentRuntime: ObservableObject {
             assessTarget: privacy.targetAssessor(),
             secureInputActive: { PrivacyMonitor.secureInputActive }
         )
+        policy.integrations = IntegrationPolicy(sensitiveAllowed: turn.sensitiveAllowed, knownServers: Set(turn.servers.keys))
         let runner = ClaudeCodeRunner(policy: policy)
         runners[agentID] = runner
         if computerUseOn { store.installComputerUseSkill(for: agent, from: ComputerUseHost.skillDirectory) }
+
+        var servers = turn.servers
+        if computerUseOn, let entry = computerUse.mcpServerEntry { servers[ComputerUseHost.mcpServerName] = entry }
         let options = ClaudeCodeRunner.Options(
             cwd: store.folder(for: agent),
             sessionID: agent.sessionID,
             newSessionID: UUID().uuidString.lowercased(),
             model: model,
-            appendSystemPrompt: Self.turnPreamble(for: agent, computerUse: computerUseOn, routine: routine),
-            mcpConfigJSON: computerUseOn ? computerUse.mcpConfigJSON : nil
+            appendSystemPrompt: Self.turnPreamble(for: agent, computerUse: computerUseOn, routine: routine, integrations: turn),
+            mcpConfigJSON: ComputerUseHost.mcpConfigJSON(servers: servers)
         )
         do {
             try runner.start(prompt: text, options: options) { [weak self] event in
@@ -91,7 +107,7 @@ final class AgentRuntime: ObservableObject {
     }
 
     /// Standing rules every turn carries, on top of the persona in the folder's CLAUDE.md.
-    private static func turnPreamble(for agent: Agent, computerUse: Bool, routine: Routine? = nil) -> String {
+    private static func turnPreamble(for agent: Agent, computerUse: Bool, routine: Routine? = nil, integrations: IntegrationsHost.TurnServers = .init()) -> String {
         var text = """
         You are \(agent.name), a helper running inside HeyClicky Clone on this person's Mac. Your working directory is your own folder; its CLAUDE.md holds your persona and dated notes. Keep finished work in output/ and scratch in tmp/. You cannot ask the user questions mid-turn, so make reasonable choices and say what you assumed. Your final message is shown in a small card and may be read aloud: lead with the result in plain words, keep it short, and say what did not work.
 
@@ -114,6 +130,11 @@ final class AgentRuntime: ObservableObject {
             """
         } else {
             text += "\n\nComputer use (clicking in apps) is turned off for you right now; if a task needs it, say so and tell the user it can be enabled in Setup."
+        }
+        if integrations.summary.isEmpty {
+            text += "\n\nNo online accounts are connected; if a task needs Gmail, Notion or another service, say so and tell the user they can connect it in Setup → Integrations."
+        } else {
+            text += "\n\nConnected integrations, available as MCP tools (mcp__<server>__<tool>): " + integrations.summary.joined(separator: "; ") + ". Use them directly for anything in those services. Tools that send, reply, delete, pay or publish are blocked unless the user allowed them for that server; when one is blocked, prepare everything else and tell the user what you would have sent or removed."
         }
         return text
     }

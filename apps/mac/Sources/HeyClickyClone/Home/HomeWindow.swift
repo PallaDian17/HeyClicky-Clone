@@ -37,7 +37,12 @@ struct HomeView: View {
     @ObservedObject private var privacy: PrivacyMonitor
     @ObservedObject private var routines: RoutineStore
     @ObservedObject private var dictionary: DictationDictionary
+    @ObservedObject private var integrations: IntegrationsHost
     @State private var newWord = ""
+    @State private var newConnectorName = ""
+    @State private var newConnectorURL = ""
+    @State private var newConnectorAuth: CustomConnector.Auth = .oauth
+    @State private var newConnectorToken = ""
     @State private var newProtectedApp = ""
 
     init(app: AppDelegate) {
@@ -49,6 +54,7 @@ struct HomeView: View {
         _privacy = ObservedObject(wrappedValue: app.privacy)
         _routines = ObservedObject(wrappedValue: app.routines)
         _dictionary = ObservedObject(wrappedValue: app.dictation.dictionary)
+        _integrations = ObservedObject(wrappedValue: app.integrations)
     }
 
     var body: some View {
@@ -143,6 +149,49 @@ struct HomeView: View {
                 }
             }
 
+            section("Integrations") {
+                if integrations.composioConfigured {
+                    Text("Online accounts through Composio. Connect one and every Clicky can use it.").font(.callout)
+                    ForEach(integrations.toolkits) { toolkit in
+                        HStack {
+                            Text(toolkit.name).font(.callout)
+                            Text(toolkit.connected ? "connected" : "not connected").font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            if toolkit.connected {
+                                Button("Disconnect") { Task { await integrations.disconnectComposio(toolkit.slug) } }.controlSize(.small)
+                            } else {
+                                Button("Connect") { Task { await integrations.connectComposio(toolkit.slug) } }.controlSize(.small)
+                            }
+                        }
+                    }
+                    Toggle("Allow Composio tools that send, delete or pay", isOn: $integrations.composioAllowSensitive).font(.caption)
+                } else {
+                    Text("Composio is not configured on the backend (set COMPOSIO_API_KEY to offer Gmail, Notion, Slack and friends). Custom connectors below work without it.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+
+                Divider().padding(.vertical, 2)
+                Text("Custom connectors: any remote MCP server, signed in through its own OAuth or an access token.").font(.callout)
+                ForEach(integrations.connectors) { connector in
+                    ConnectorRow(connector: connector, host: integrations)
+                }
+                HStack(spacing: 8) {
+                    TextField("Name", text: $newConnectorName).textFieldStyle(.roundedBorder).frame(width: 140)
+                    TextField("https://host/mcp", text: $newConnectorURL).textFieldStyle(.roundedBorder)
+                    Picker("", selection: $newConnectorAuth) {
+                        ForEach(CustomConnector.Auth.allCases) { Text($0.label).tag($0) }
+                    }.frame(width: 150)
+                    if newConnectorAuth == .bearer {
+                        SecureField("token", text: $newConnectorToken).textFieldStyle(.roundedBorder).frame(width: 140)
+                    }
+                    Button("Add", action: addConnector)
+                        .disabled(newConnectorName.trimmingCharacters(in: .whitespaces).isEmpty || URL(string: newConnectorURL)?.host == nil)
+                }
+                if let msg = integrations.lastMessage {
+                    Text(msg).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
+            }
+
             section("Computer use") {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -225,6 +274,14 @@ struct HomeView: View {
         }
     }
 
+    private func addConnector() {
+        let c = integrations.add(name: newConnectorName, url: newConnectorURL, auth: newConnectorAuth, token: newConnectorToken)
+        newConnectorName = ""; newConnectorURL = ""; newConnectorToken = ""
+        Task {
+            if c.auth == .oauth { await integrations.signIn(c.id) } else { await integrations.test(c.id) }
+        }
+    }
+
     private func addWord() {
         dictionary.add(newWord)
         newWord = ""
@@ -292,6 +349,39 @@ struct FlowChips: View {
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(Capsule().fill(Color.accentColor.opacity(0.2)))
             }
+        }
+    }
+}
+
+
+struct ConnectorRow: View {
+    let connector: CustomConnector
+    @ObservedObject var host: IntegrationsHost
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(connector.name).font(.callout.weight(.semibold))
+                    Text(connector.url).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Text(host.status(for: connector)).font(.caption).foregroundStyle(connector.lastError == nil ? .secondary : Color.orange).lineLimit(2)
+                HStack(spacing: 12) {
+                    Toggle("On", isOn: Binding(get: { connector.enabled }, set: { var c = connector; c.enabled = $0; host.update(c) })).font(.caption)
+                    Toggle("Allow send & delete", isOn: Binding(get: { connector.allowSensitiveActions }, set: { var c = connector; c.allowSensitiveActions = $0; host.update(c) })).font(.caption)
+                }
+            }
+            Spacer()
+            if host.busy.contains(connector.id) { ProgressView().controlSize(.small) }
+            if connector.auth == .oauth {
+                if host.tokens(for: connector.id) == nil {
+                    Button("Sign in") { Task { await host.signIn(connector.id) } }.controlSize(.small)
+                } else {
+                    Button("Sign out") { host.signOut(connector.id) }.controlSize(.small)
+                }
+            }
+            Button("Test") { Task { await host.test(connector.id) } }.controlSize(.small)
+            Button(role: .destructive) { host.remove(connector.id) } label: { Image(systemName: "trash") }.controlSize(.small)
         }
     }
 }

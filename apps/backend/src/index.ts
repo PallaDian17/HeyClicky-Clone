@@ -8,6 +8,7 @@ import { realtimeRoute } from "./routes/realtime.js";
 import { interviewRoute } from "./routes/interview.js";
 import { dictationRoute } from "./routes/dictation.js";
 import { suggestionsRoute } from "./routes/suggestions.js";
+import { integrationsRoute } from "./routes/integrations.js";
 
 const app = new Hono<{ Variables: { user: AuthedUser } }>();
 app.use("*", logger());
@@ -30,11 +31,13 @@ app.use("/v1/realtime/*", requireUser);
 app.use("/v1/interview", requireUser);
 app.use("/v1/dictation/*", requireUser);
 app.use("/v1/suggestions", requireUser);
+app.use("/v1/integrations/*", requireUser);
 app.route("/v1/chat", chatRoute);
 app.route("/v1/realtime", realtimeRoute);
 app.route("/v1/interview", interviewRoute);
 app.route("/v1/dictation", dictationRoute);
 app.route("/v1/suggestions", suggestionsRoute);
+app.route("/v1/integrations", integrationsRoute);
 
 app.onError((err, c) => {
   console.error(err);

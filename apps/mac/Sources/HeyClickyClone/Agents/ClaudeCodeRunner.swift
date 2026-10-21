@@ -149,6 +149,13 @@ final class ClaudeCodeRunner {
         case "system":
             if o["subtype"] as? String == "init" {
                 emit(.started(sessionID: o["session_id"] as? String ?? "", model: o["model"] as? String ?? ""))
+                if let servers = o["mcp_servers"] as? [[String: Any]] {
+                    let summary = servers.map { "\($0["name"] ?? "?")=\($0["status"] ?? "?")" }.joined(separator: " ")
+                    Log.agents.info("mcp servers: \(summary, privacy: .public)")
+                }
+                if let errors = o["mcp_server_errors"] as? [[String: Any]], !errors.isEmpty {
+                    Log.agents.error("mcp server errors: \(String(describing: errors), privacy: .public)")
+                }
             }
         case "stream_event":
             guard let ev = o["event"] as? [String: Any] else { return }
@@ -266,6 +273,7 @@ struct PermissionPolicy {
 
     let workspace: URL
     var computerUse = ComputerUsePolicy(consentGranted: false)
+    var integrations = IntegrationPolicy()
 
     static let deniedShellPatterns: [String] = [
         "rm -rf /", "rm -rf ~", "rm -rf $HOME", "sudo ", "mkfs", "diskutil erase", "> /dev/", ":(){", "shutdown", "reboot",
@@ -277,6 +285,7 @@ struct PermissionPolicy {
 
     func decide(tool: String, input: [String: Any]) -> Decision {
         if ComputerUsePolicy.isComputerUse(tool) { return computerUse.decide(tool: tool, input: input) }
+        if tool.hasPrefix("mcp__") { return integrations.decide(tool: tool) }
         if tool == "Skill", let name = (input["skill"] as? String ?? input["command"] as? String)?.lowercased(),
            ClaudeCodeRunner.disallowedSkills.contains(where: { name == $0 || name.hasPrefix($0 + " ") || name.hasPrefix($0 + ":") }) {
             return .deny("That skill is disabled here. To repeat a task, end your reply with a <ROUTINE>{...}</ROUTINE> tag; the app runs it on that cadence.")

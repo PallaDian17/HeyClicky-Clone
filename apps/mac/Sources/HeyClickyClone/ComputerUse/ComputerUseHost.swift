@@ -46,21 +46,25 @@ final class ComputerUseHost: ObservableObject {
         }
     }
 
-    /// MCP server definition for Claude Code's --mcp-config.
-    var mcpConfigJSON: String? {
+    /// MCP server entry for Claude Code's --mcp-config (merged with integrations per turn).
+    var mcpServerEntry: [String: Any]? {
         guard isRunning, let binary = Self.binary else { return nil }
         // Named "cua": Claude Code silently discards a server called "computer-use".
-        let config: [String: Any] = [
-            "mcpServers": [
-                Self.mcpServerName: [
-                    "type": "stdio",
-                    "command": binary.path,
-                    "args": ["mcp", "--embedded", "--socket", socketPath, "--host-bundle-id", Self.hostBundleID],
-                    "env": ["CUA_DRIVER_EMBEDDED": "1", "CUA_DRIVER_HOST_BUNDLE_ID": Self.hostBundleID],
-                ],
-            ],
+        return [
+            "type": "stdio",
+            "command": binary.path,
+            "args": ["mcp", "--embedded", "--socket", socketPath, "--host-bundle-id", Self.hostBundleID],
+            "env": ["CUA_DRIVER_EMBEDDED": "1", "CUA_DRIVER_HOST_BUNDLE_ID": Self.hostBundleID],
         ]
-        guard let data = try? JSONSerialization.data(withJSONObject: config) else { return nil }
+    }
+
+    var mcpConfigJSON: String? {
+        guard let entry = mcpServerEntry else { return nil }
+        return Self.mcpConfigJSON(servers: [Self.mcpServerName: entry])
+    }
+
+    static func mcpConfigJSON(servers: [String: Any]) -> String? {
+        guard !servers.isEmpty, let data = try? JSONSerialization.data(withJSONObject: ["mcpServers": servers]) else { return nil }
         return String(decoding: data, as: UTF8.self)
     }
 

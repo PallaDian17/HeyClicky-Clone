@@ -272,6 +272,46 @@ transcripts, and logging.
   a founded Clicky, and the HUD's agent state uses their names and initials.
 - The New Clicky interview (3.3) stays, for agents beyond the starter two.
 
+### 3.12 Integrations — built 2026-10-21
+Two kinds, both delivered to a turn as extra `--mcp-config` HTTP servers next
+to `cua`, so a Clicky sees them as `mcp__<server>__<tool>`.
+
+- **Composio toolkits** (Gmail, Google Calendar, Google Drive, Notion, Slack,
+  GitHub, Linear). Backend `/v1/integrations/{catalog,connect,disconnect,session}`
+  over `@composio/core`, gated on `COMPOSIO_API_KEY` (no key on this machine,
+  so the live app shows the "not configured" line). `connect` ensures one
+  Composio-managed auth config per toolkit and returns a hosted Connect Link
+  whose callback is `heyclickyclone://integrations/composio`; `session`
+  creates a per-user session (`sessions.create(uid, {toolkits, mcp: true})`)
+  and hands back `mcp.url` + `mcp.headers`, cached in the app for 20 min.
+  The headers carry the project key, so they ride in the agent process's
+  arguments — acceptable for personal use, not for distribution.
+- **Custom connectors** (`Integrations/`): any remote Streamable-HTTP MCP
+  server, stored in `connectors.json`; tokens in the Keychain (service
+  `com.ashish.heyclickyclone.connectors`, account = connector id). Auth modes
+  none / access token / OAuth. OAuth = RFC 9728 protected-resource metadata
+  → RFC 8414 / OpenID metadata → RFC 7591 dynamic registration (public
+  client, redirect `heyclickyclone://integrations/oauth`) → PKCE S256 code
+  flow in the user's browser → exchange, refresh ahead of each turn when
+  within 2 min of expiry. `MCPProbe` lists the server's tools for the Setup
+  row. Verified end to end against `scripts/mock-connector.mjs` (an
+  auto-approving OAuth server + MCP server): registration, authorize, token,
+  probe (3 tools), then a real Scout turn where Claude Code reported
+  `c-mock-notes=connected` and the mock logged `get_weather` and `add_note`
+  calls carrying the bearer token.
+- **Sensitive-action gate** (`IntegrationPolicy`): tools whose name contains
+  send / reply / delete / remove / trash / pay / purchase / transfer / archive
+  / cancel / publish are denied per server until the user flips "Allow send
+  & delete" for that connector (or the Composio toggle). The preamble tells
+  the Clicky to prepare everything else and say what it would have sent.
+- Setup → Integrations lists toolkits with Connect/Disconnect and connectors
+  with Sign in / Sign out / Test / On / Allow send & delete / remove, plus an
+  add form. Debug routes: `integrations/add?name&url&auth[&token]`,
+  `signin?id[&headless=1]`, `test?id`, `signout?id`, `remove?id`,
+  `sensitive?id&on=1`, `list`, `composio/refresh|connect|disconnect`.
+- Not built: HeyClicky's multi-account per toolkit and its connector
+  capability editor; both are additive.
+
 ## 4. Repo layout (proposed)
 
 ```
@@ -316,8 +356,11 @@ Remaining, re-cut on 2026-10-21 for personal use and UI fidelity:
    verify with AX fallback, learned dictionary with Setup editor; routine
    registry + scheduler + agent `<ROUTINE>` tag; morning suggestions notch.
    Not yet exercised with a real microphone (permission not granted).
-7. **Integrations:** Composio MCP session for the agents' Gmail/Notion/… plus
-   custom OAuth connectors in settings.
+7. **Integrations — done 2026-10-21:** Composio session MCP (gated on a
+   key that is not configured here) plus custom OAuth/token connectors with
+   discovery, registration, PKCE, refresh, a tool probe, and the per-server
+   send/delete gate; verified against the bundled mock connector and a real
+   agent turn.
 8. **Polish, personal edition:** onboarding (voice picker, skill picker, intro,
    tutorial, permission guide), original mascot + character editor, Sparkle
    updates, crash reporting. No Stripe, paywall or referral.

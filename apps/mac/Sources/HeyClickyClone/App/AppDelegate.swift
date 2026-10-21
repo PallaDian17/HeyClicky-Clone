@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let computerUse = ComputerUseHost()
     private(set) lazy var agents = AgentRuntime(store: AgentStore(), computerUse: computerUse, privacy: privacy, notch: notch.model, model: config.agentModel)
     private(set) lazy var dictation = DictationController(notch: notch.model, backend: backend, privacy: privacy)
+    private(set) lazy var integrations = IntegrationsHost(backend: backend)
     let routines = RoutineStore()
     private(set) lazy var scheduler = RoutineScheduler(store: routines, agents: agents, notch: notch.model)
     private(set) lazy var suggestions = MorningSuggestions(backend: backend, agents: agents, routines: routines, scheduler: scheduler, notch: notch.model)
@@ -54,6 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireRoutines()
         scheduler.start()
         suggestions.start()
+        agents.integrations = integrations
+        Task { await integrations.refreshComposio() }
 
         auth.$state
             .receive(on: DispatchQueue.main)
@@ -259,6 +262,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let text = URLComponents(url: url, resolvingAgainstBaseURL: false)?
                 .queryItems?.first(where: { $0.name == "text" })?.value ?? "What am I looking at?"
             talk.ask(text)
+        case "integrations":
+            handleIntegrationsURL(url)
         case "dictate":
             // `heyclickyclone://dictate?text=…` runs cleanup + insertion into the focused field without the microphone.
             // `heyclickyclone://dictate/begin` | `/end` drive the real microphone path.
@@ -309,6 +314,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         default:
             break
         }
+    }
+
+    /// OAuth / Composio callbacks plus developer hooks:
+    /// `integrations/oauth?code&state` · `integrations/composio?status` ·
+    /// `integrations/add?name&url&auth=none|bearer|oauth&token` · `integrations/signin?id[&headless=1]` ·
+    /// `integrations/test?id` · `integrations/remove?id` · `integrations/sensitive?id&on=1` · `integrations/list` ·
+    /// `integrations/composio/refresh` · `integrations/composio/connect?toolkit=gmail`
+    private func handleIntegrationsURL(_ url: URL) {
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        func q(_ n: String) -> String? { items.first(where: { $0.name == n })?.value }
+        let id = q("id").flatMap(UUID.init(uuidString:))
+        let path = url.path.split(separator: "/").map(String.init)
+        switch path.first {
+        case "oauth":
+            Task { await integrations.handleOAuthCallback(url); self.openHome() }
+        case "composio":
+            if path.count > 1 {
+                switch path[1] {
+                case "refresh": Task { await integrations.refreshComposio() }
+                case "connect": if let t = q("toolkit") { Task { await integrations.connectComposio(t) } }
+                case "disconnect": if let t = q("toolkit") { Task { await integrations.disconnectComposio(t) } }
+                default: break
+                }
+            } else {
+                Task { await integrations.handleComposioCallback(url); self.openHome() }
+            }
+        case "add":
+            let auth = CustomConnector.Auth(rawValue: q("auth") ?? "none") ?? .none
+            let c = integrations.add(name: q("name") ?? "Connector", url: q("url") ?? "", auth: auth, token: q("token"))
+            Log.integrations.info("integrations/add id=\(c.id.uuidString, privacy: .public) slug=\(c.slug, privacy: .public)")
+        case "signin": if let id { Task { await integrations.signIn(id, headless: q("headless") == "1") } }
+        case "test": if let id { Task { await integrations.test(id) } }
+        case "remove": if let id { integrations.remove(id) }
+        case "signout": if let id { integrations.signOut(id) }
+        case "sensitive":
+            if let id, var c = integrations.connector(id: id) { c.allowSensitiveActions = q("on") == "1"; integrations.update(c) }
+        case "list":
+            for c in integrations.connectors {
+                Log.integrations.info("connector \(c.id.uuidString, privacy: .public) '\(c.name, privacy: .public)' slug=\(c.slug, privacy: .public) auth=\(c.auth.rawValue, privacy: .public) enabled=\(c.enabled) sensitive=\(c.allowSensitiveActions) status=\(self.integrations.status(for: c), privacy: .public) tools=\(c.toolNames.joined(separator: ","), privacy: .public)")
+            }
+            Log.integrations.info("integrations/list connectors=\(self.integrations.connectors.count) composioConfigured=\(self.integrations.composioConfigured) toolkits=\(self.integrations.toolkits.map { "\($0.slug):\($0.connected)" }.joined(separator: ","), privacy: .public)")
+        default: break
+        }
+        if path.first != "oauth", path.first != "composio" { openHome() }
     }
 
     /// Developer hook: `open "heyclickyclone://snapshot?window=home&path=/tmp/home.png"`.

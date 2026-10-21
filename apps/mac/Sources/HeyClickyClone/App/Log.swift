@@ -10,4 +10,5 @@ enum Log {
     static let agents = Logger(subsystem: subsystem, category: "agents")
     static let computerUse = Logger(subsystem: subsystem, category: "computer-use")
     static let privacy = Logger(subsystem: subsystem, category: "privacy")
+    static let integrations = Logger(subsystem: subsystem, category: "integrations")
 }
