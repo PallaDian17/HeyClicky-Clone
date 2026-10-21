@@ -261,12 +261,14 @@ Remaining, re-cut on 2026-10-21 for personal use and UI fidelity:
    computer use, clipboard and logs (dictation joins when phase 6 builds it),
    21 rule checks in `swift run privacy-checks`, and live verification on a
    focused password field, a plain page and an agent read of a sign-in window.
-5. **Home Space and agents, faithful:** the two starter Clickys founded on first
-   launch with first-message suggestions; the original's Home layout (icon
-   rail, agent cards, cowork transcript with diffs/tables/markdown, output
-   preview column, file drop, suggestions page); agent HUD with artifact pile
-   and follow-up voice plate; New Clicky interview; thread resume; talk-to-
-   agent handoff; place/image/stock reply cards.
+5. **Home Space and agents — mostly done 2026-10-21:** starter Clickys (Scout,
+   Desk) founded on first launch with first asks; New Clicky interview page
+   (backend `/v1/interview`, brief → founded agent); Markdown transcript;
+   output column with Quick Look and drag-out; file drop into the Clicky's
+   folder; talk-to-agent handoff (chat returns `handoff`, the app drops the
+   screenshot into tmp/handoffs and starts the turn). Still open from the
+   original: cowork diff/table blocks, suggestions page, agent HUD artifact
+   pile and follow-up voice plate, place/image/stock reply cards.
 6. **Dictation and routines:** Deepgram streaming with backend token, paste
    with verification, learned dictionary and its notch surface; routine
    registry, due-queue, run markers, morning suggestions notch.

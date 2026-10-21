@@ -5,7 +5,15 @@ HUD, push-to-talk screen-aware voice chat that can draw on the screen, named
 agents that run tasks on the Mac through a bundled Codex runtime and a
 computer-use driver, dictation, and scheduled routines.
 
-Status: **phase 4b — privacy guard is on.** One gate in front of every screen
+Status: **phase 5 — the Home Space fills out.** Two starter Clickys (Scout and
+Desk) are founded on first launch with tappable first asks; a New Clicky page
+runs a short interview that ends in a founded agent with its own persona notes
+and first asks; the transcript renders Markdown; an output column lists what
+each Clicky produced with Quick Look and drag-out; files dropped on the
+composer land in the Clicky's folder; and talk mode hands "do this for me"
+requests to a Clicky along with a screenshot of what you were looking at.
+
+Phase 4b — privacy guard is on. One gate in front of every screen
 and voice path: nothing is captured while a password field is active, in
 password managers, keychain, wallet, banking or payment apps, or on payment,
 sign-in and verification pages; one-time codes, card numbers and spelled-out

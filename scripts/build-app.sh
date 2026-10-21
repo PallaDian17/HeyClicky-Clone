@@ -40,6 +40,9 @@ else
   echo "warning: vendor/cua/bin/cua-driver missing; run vendor/fetch-cua-driver.sh (computer use disabled)" >&2
 fi
 
+# Starter Clickys founded on first launch.
+cp "$ROOT/apps/mac/Bundle/starter-agents.json" "$APP/Contents/Resources/starter-agents.json"
+
 # SwiftPM resource bundles, if any target declares resources.
 for b in "$(dirname "$BIN")"/*.bundle; do
   [[ -d "$b" ]] && cp -R "$b" "$APP/Contents/Resources/"

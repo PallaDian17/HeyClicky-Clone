@@ -5,6 +5,7 @@ import { env } from "./env.js";
 import { requireUser, type AuthedUser } from "./auth.js";
 import { chatRoute } from "./routes/chat.js";
 import { realtimeRoute } from "./routes/realtime.js";
+import { interviewRoute } from "./routes/interview.js";
 
 const app = new Hono<{ Variables: { user: AuthedUser } }>();
 app.use("*", logger());
@@ -24,8 +25,10 @@ app.get("/v1/config", (c) =>
 app.use("/v1/chat/*", requireUser);
 app.use("/v1/chat", requireUser);
 app.use("/v1/realtime/*", requireUser);
+app.use("/v1/interview", requireUser);
 app.route("/v1/chat", chatRoute);
 app.route("/v1/realtime", realtimeRoute);
+app.route("/v1/interview", interviewRoute);
 
 app.onError((err, c) => {
   console.error(err);

@@ -87,7 +87,16 @@ with `CLAUDE.md` (persona + dated notes, loaded by Claude Code from cwd),
 ```bash
 open "heyclickyclone://agent/new?name=Scout&purpose=tidies%20notes"
 open "heyclickyclone://agent/send?slug=scout&text=Create%20output%2Fhi.txt"
+open -g "heyclickyclone://agent/starters"       # found any missing starter Clickys (starter-agents.json)
+open -g "heyclickyclone://agent/select?slug=desk"
+open -g "heyclickyclone://agent/interview"      # open the New Clicky page
 ```
+
+Starter Clickys live in `apps/mac/Bundle/starter-agents.json` (name, purpose,
+persona notes, three first asks) and are founded once on first launch. Talk
+mode hands off when the backend's chat response carries `handoff`; the app
+picks the named Clicky (or Desk), saves the screenshot to `tmp/handoffs/` and
+starts the turn. Use `open -g` for talk-mode URLs so the app is not activated.
 
 ## Computer use (cua-driver)
 

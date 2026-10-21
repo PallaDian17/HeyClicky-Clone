@@ -31,6 +31,8 @@ export type ChatResponse = {
   text: string;
   element_id: number | null;
   box: { x: number; y: number; w: number; h: number } | null;
+  /** Set when the user asked for work to be done rather than explained. */
+  handoff: { task: string; agent_hint: string | null } | null;
 };
 
 const responseSchema = {
@@ -45,8 +47,14 @@ const responseSchema = {
       properties: { x: { type: "number" }, y: { type: "number" }, w: { type: "number" }, h: { type: "number" } },
       required: ["x", "y", "w", "h"],
     },
+    handoff: {
+      type: ["object", "null"],
+      additionalProperties: false,
+      properties: { task: { type: "string" }, agent_hint: { type: ["string", "null"] } },
+      required: ["task", "agent_hint"],
+    },
   },
-  required: ["text", "element_id", "box"],
+  required: ["text", "element_id", "box", "handoff"],
 };
 
 function describeElements(req: ChatRequest): string {
@@ -92,8 +100,9 @@ chatRoute.post("/", async (c) => {
     const valid = new Set(req.elements.map((e) => e.id));
     const element_id = value.element_id !== null && valid.has(value.element_id) ? value.element_id : null;
     const box = value.box && [value.box.x, value.box.y, value.box.w, value.box.h].every((n) => n >= 0 && n <= 1) ? value.box : null;
-    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} target=${element_id ?? (box ? "box" : "none")}`);
-    return c.json({ text: value.text, element_id, box, usage });
+    const handoff = value.handoff && value.handoff.task.trim() ? value.handoff : null;
+    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} target=${element_id ?? (box ? "box" : "none")} handoff=${handoff ? "yes" : "no"}`);
+    return c.json({ text: value.text, element_id, box, handoff, usage });
   } catch (err) {
     const status = err instanceof OpenAIError ? 502 : 500;
     console.error("[chat] failed:", err);

@@ -32,6 +32,10 @@ final class TalkCoordinator {
     private var history: [BackendClient.HistoryTurn] = []
     private var turnTask: Task<Void, Never>?
 
+    /// Routes a hand-off to an agent. Receives the task, the named helper if any,
+    /// and the screenshot (nil when withheld). Returns the agent's name, or nil if none took it.
+    var onHandoff: ((_ task: String, _ agentHint: String?, _ screenshotJPEG: Data?) -> String?)?
+
     init(notch: NotchViewModel, backend: BackendClient, overlay: PointingOverlayManager, privacy: PrivacyMonitor) {
         self.notch = notch
         self.backend = backend
@@ -142,6 +146,17 @@ final class TalkCoordinator {
             let replyText = PrivacyGuard.redact(reply.text).text
             history.append(.init(role: "user", text: transcript))
             history.append(.init(role: "assistant", text: replyText))
+
+            if let handoff = reply.handoff, let onHandoff {
+                let task = PrivacyGuard.redact(handoff.task).text
+                let shot = context.withheld == nil ? context.shot.flatMap { Data(base64Encoded: $0.jpegBase64) } : nil
+                if let name = onHandoff(task, handoff.agent_hint, shot) {
+                    Log.app.info("handoff to \(name, privacy: .public) (\(task.count) chars, screenshot=\(shot != nil))")
+                    notch.set(.reply("Handing that to \(name)."), autoDismissAfter: 5)
+                    if voice.isUsable { phase = .speaking; voice.speak("Handing that to \(name).") } else { phase = .idle }
+                    return
+                }
+            }
 
             notch.set(.reply(replyText), autoDismissAfter: 12)
             if context.withheld == nil { point(reply, context: context) }

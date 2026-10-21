@@ -7,10 +7,33 @@ struct Agent: Codable, Identifiable, Equatable {
     var name: String
     var purpose: String
     var createdAt: Date
-    var sessionID: String?        // Claude Code session to resume
+    var sessionID: String?            // Claude Code session to resume
     var lastActivity: Date?
+    var firstMessages: [String] = []  // tappable starters shown while the chat is empty
+    var notes: [String] = []          // durable facts written into the persona at founding
+    var isStarter = false
 
     var initial: String { String(name.prefix(1)).uppercased() }
+
+    enum CodingKeys: String, CodingKey { case id, slug, name, purpose, createdAt, sessionID, lastActivity, firstMessages, notes, isStarter }
+    init(id: UUID, slug: String, name: String, purpose: String, createdAt: Date, sessionID: String? = nil, lastActivity: Date? = nil,
+         firstMessages: [String] = [], notes: [String] = [], isStarter: Bool = false) {
+        self.id = id; self.slug = slug; self.name = name; self.purpose = purpose; self.createdAt = createdAt
+        self.sessionID = sessionID; self.lastActivity = lastActivity; self.firstMessages = firstMessages; self.notes = notes; self.isStarter = isStarter
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        slug = try c.decode(String.self, forKey: .slug)
+        name = try c.decode(String.self, forKey: .name)
+        purpose = try c.decode(String.self, forKey: .purpose)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        sessionID = try c.decodeIfPresent(String.self, forKey: .sessionID)
+        lastActivity = try c.decodeIfPresent(Date.self, forKey: .lastActivity)
+        firstMessages = try c.decodeIfPresent([String].self, forKey: .firstMessages) ?? []
+        notes = try c.decodeIfPresent([String].self, forKey: .notes) ?? []
+        isStarter = try c.decodeIfPresent(Bool.self, forKey: .isStarter) ?? false
+    }
 }
 
 struct TranscriptEntry: Codable, Identifiable, Equatable {
@@ -23,6 +46,23 @@ struct TranscriptEntry: Codable, Identifiable, Equatable {
     var streaming = false
 }
 
+/// Bundled definitions for the Clickys founded on first launch.
+struct StarterAgentDefinition: Codable {
+    var slug: String
+    var name: String
+    var purpose: String
+    var notes: [String]
+    var firstMessages: [String]
+
+    static func loadBundled() -> [StarterAgentDefinition] {
+        guard let url = Bundle.main.resourceURL?.appendingPathComponent("starter-agents.json"),
+              let data = try? Data(contentsOf: url),
+              let file = try? JSONDecoder().decode(StarterFile.self, from: data) else { return [] }
+        return file.agents
+    }
+    private struct StarterFile: Codable { var version: Int; var agents: [StarterAgentDefinition] }
+}
+
 /// Roster + folders on disk under Application Support/HeyClickyClone/agents/.
 @MainActor
 final class AgentStore: ObservableObject {
@@ -30,6 +70,7 @@ final class AgentStore: ObservableObject {
 
     let root: URL
     private var rosterURL: URL { root.appendingPathComponent("roster.json") }
+    private static let startersFoundedKey = "ClickyStartersFounded"
 
     init() {
         root = AppConfig.appSupportDirectory.appendingPathComponent("agents", isDirectory: true)
@@ -41,10 +82,38 @@ final class AgentStore: ObservableObject {
 
     func agent(id: UUID) -> Agent? { agents.first { $0.id == id } }
 
+    /// Founds the bundled starters once (on first launch), or when forced, any that are missing.
     @discardableResult
-    func create(name: String, purpose: String) throws -> Agent {
-        let slug = Self.uniqueSlug(for: name, taken: Set(agents.map(\.slug)))
-        let agent = Agent(id: UUID(), slug: slug, name: name, purpose: purpose, createdAt: Date())
+    func foundStarters(force: Bool = false) -> [Agent] {
+        let already = UserDefaults.standard.bool(forKey: Self.startersFoundedKey)
+        guard force || !already else { return [] }
+        var founded: [Agent] = []
+        for def in StarterAgentDefinition.loadBundled() {
+            if var existing = agents.first(where: { $0.slug == def.slug }) {
+                // An agent with this slug pre-dates the starters: give it the starter's suggestions.
+                if existing.firstMessages.isEmpty {
+                    existing.firstMessages = def.firstMessages
+                    existing.isStarter = true
+                    update(existing)
+                }
+                continue
+            }
+            if let agent = try? create(name: def.name, purpose: def.purpose, notes: def.notes, firstMessages: def.firstMessages,
+                                       preferredSlug: def.slug, isStarter: true) {
+                founded.append(agent)
+            }
+        }
+        UserDefaults.standard.set(true, forKey: Self.startersFoundedKey)
+        if !founded.isEmpty { Log.agents.info("founded starters: \(founded.map(\.slug).joined(separator: ", "), privacy: .public)") }
+        return founded
+    }
+
+    @discardableResult
+    func create(name: String, purpose: String, notes: [String] = [], firstMessages: [String] = [],
+                preferredSlug: String? = nil, isStarter: Bool = false) throws -> Agent {
+        let slug = Self.uniqueSlug(for: preferredSlug ?? name, taken: Set(agents.map(\.slug)))
+        let agent = Agent(id: UUID(), slug: slug, name: name, purpose: purpose, createdAt: Date(),
+                          firstMessages: firstMessages, notes: notes, isStarter: isStarter)
         let dir = folder(for: agent)
         let fm = FileManager.default
         try fm.createDirectory(at: dir.appendingPathComponent("output"), withIntermediateDirectories: true)
@@ -87,6 +156,37 @@ final class AgentStore: ObservableObject {
         Log.computerUse.info("installed cua-driver skill \(version, privacy: .public) for \(agent.slug, privacy: .public)")
     }
 
+    /// Stores dropped files under tmp/attachments and returns their new paths.
+    func attach(files: [URL], to agent: Agent) -> [URL] {
+        let dir = folder(for: agent).appendingPathComponent("tmp/attachments", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var out: [URL] = []
+        for file in files {
+            var target = dir.appendingPathComponent(file.lastPathComponent)
+            var n = 2
+            while FileManager.default.fileExists(atPath: target.path) {
+                target = dir.appendingPathComponent("\(file.deletingPathExtension().lastPathComponent)-\(n).\(file.pathExtension)")
+                n += 1
+            }
+            if (try? FileManager.default.copyItem(at: file, to: target)) != nil { out.append(target) }
+        }
+        return out
+    }
+
+    /// Files the agent produced, newest first.
+    func outputFiles(for agent: Agent) -> [URL] {
+        let dir = folder(for: agent).appendingPathComponent("output", isDirectory: true)
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey]
+        guard let items = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else { return [] }
+        return items
+            .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
+            .sorted { (a, b) in
+                let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                return da > db
+            }
+    }
+
     // MARK: - Transcript persistence
 
     func loadTranscript(for agent: Agent) -> [TranscriptEntry] {
@@ -107,7 +207,6 @@ final class AgentStore: ObservableObject {
         guard let data = try? Data(contentsOf: rosterURL),
               let list = try? Self.decoder.decode([Agent].self, from: data) else { return }
         agents = list.filter { FileManager.default.fileExists(atPath: folder(for: $0).path) }
-        // Agents founded before the Claude runtime have AGENTS.md but no CLAUDE.md.
         for agent in agents {
             let persona = folder(for: agent).appendingPathComponent("CLAUDE.md")
             if !FileManager.default.fileExists(atPath: persona.path) {
@@ -138,6 +237,7 @@ final class AgentStore: ObservableObject {
     /// The persona file Claude Code loads from the working directory at the start of every turn.
     static func persona(for agent: Agent) -> String {
         let date = ISO8601DateFormatter().string(from: agent.createdAt).prefix(10)
+        let notes = agent.notes.map { "- \(date): \($0.hasPrefix("- ") ? String($0.dropFirst(2)) : $0)" }.joined(separator: "\n")
         return """
         # \(agent.name)
 
@@ -145,7 +245,7 @@ final class AgentStore: ObservableObject {
         Your job: \(agent.purpose)
 
         ## How you work
-        - This folder is yours. Finished work goes in `output/`; scratch files go in `tmp/`. When you are done, `output/` holds only what was asked for.
+        - This folder is yours. Finished work goes in `output/`; scratch files go in `tmp/`. Files the person shares with you arrive in `tmp/attachments/`. When you are done, `output/` holds only what was asked for.
         - Do what was asked, then stop. Ask only when the answer genuinely depends on something only the person knows, and bundle your questions.
         - Never claim something happened unless it did. Never invent facts, files or links.
         - Confirm before deleting data, sending anything, or spending money.
@@ -155,6 +255,7 @@ final class AgentStore: ObservableObject {
         Durable facts you learn about this job, newest first, each with a date. Never store passwords, tokens or other secrets here.
 
         - \(date): founded for: \(agent.purpose)
+        \(notes)
 
         """
     }

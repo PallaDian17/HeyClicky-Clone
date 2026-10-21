@@ -45,6 +45,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         permissions.refresh()
         auth.start()
         computerUse.startIfEnabled()
+        agents.store.foundStarters()
+        wireHandoff()
 
         auth.$state
             .receive(on: DispatchQueue.main)
@@ -67,6 +69,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func wireNotch() {
         notch.model.onPromptSubmitted = { [weak self] text in
             self?.talk.ask(text)
+        }
+    }
+
+    /// Talk mode asked for work to be done: pick the named Clicky (or the first
+    /// starter), drop the screenshot into its tmp/ so it can look, and start the turn.
+    private func wireHandoff() {
+        talk.onHandoff = { [weak self] task, hint, screenshot in
+            guard let self else { return nil }
+            let store = self.agents.store
+            let agent: Agent? = {
+                if let hint, !hint.isEmpty {
+                    let h = hint.lowercased()
+                    if let match = store.agents.first(where: { $0.name.lowercased() == h || $0.slug == h || $0.name.lowercased().hasPrefix(h) }) {
+                        return match
+                    }
+                }
+                return store.agents.first(where: { $0.isStarter && $0.slug == "desk" }) ?? store.agents.first
+            }()
+            guard let agent else { return nil }
+            var message = task
+            if let screenshot {
+                let dir = store.folder(for: agent).appendingPathComponent("tmp/handoffs", isDirectory: true)
+                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                let name = "screen-\(Int(Date().timeIntervalSince1970)).jpg"
+                if (try? screenshot.write(to: dir.appendingPathComponent(name))) != nil {
+                    message += "\n\nA screenshot of what the user was looking at when they asked is at tmp/handoffs/\(name) in this folder; read it if the task refers to what is on screen."
+                }
+            }
+            message = "[Handed off from talk mode] " + message
+            self.agents.send(message, to: agent.id)
+            NotificationCenter.default.post(name: .homeSpaceSelectAgent, object: agent.id)
+            return agent.name
         }
     }
 
@@ -147,6 +181,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case "new":
                 _ = try? agents.store.create(name: q("name") ?? "Scout", purpose: q("purpose") ?? "general help on this Mac")
                 openHome()
+            case "starters":
+                _ = agents.store.foundStarters(force: true)
+                openHome()
+            case "interview":
+                openHome()
+                // The Home view may be mounting right now; let it subscribe first.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    NotificationCenter.default.post(name: .homeSpaceNewClicky, object: nil)
+                }
+            case "select":
+                if let slug = q("slug"), let agent = agents.store.agents.first(where: { $0.slug == slug }) {
+                    openHome()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        NotificationCenter.default.post(name: .homeSpaceSelectAgent, object: agent.id)
+                    }
+                }
             case "send":
                 if let slug = q("slug"), let agent = agents.store.agents.first(where: { $0.slug == slug }) {
                     agents.send(q("text") ?? "Say hello in one sentence.", to: agent.id)

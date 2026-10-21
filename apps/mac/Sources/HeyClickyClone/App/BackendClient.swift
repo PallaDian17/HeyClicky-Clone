@@ -14,11 +14,17 @@ final class BackendClient {
     }
     struct HistoryTurn: Codable { var role: String; var text: String }
     struct Box: Decodable { var x: Double; var y: Double; var w: Double; var h: Double }
+    struct Handoff: Decodable { var task: String; var agent_hint: String? }
     struct ChatResponse: Decodable {
         var text: String
         var element_id: Int?
         var box: Box?
+        var handoff: Handoff?
     }
+    struct InterviewTurn: Codable { var role: String; var text: String }
+    struct InterviewRequest: Encodable { var turns: [InterviewTurn]; var existingNames: [String] }
+    struct InterviewBrief: Decodable { var name: String; var purpose: String; var notes: String; var first_messages: [String] }
+    struct InterviewResponse: Decodable { var reply: String; var done: Bool; var brief: InterviewBrief? }
     struct RealtimeGrant: Decodable {
         var clientSecret: String
         var expiresAt: Double
@@ -49,6 +55,10 @@ final class BackendClient {
 
     func mintRealtimeSession() async throws -> RealtimeGrant {
         try await post("v1/realtime/session", body: EmptyBody())
+    }
+
+    func interview(turns: [InterviewTurn], existingNames: [String]) async throws -> InterviewResponse {
+        try await post("v1/interview", body: InterviewRequest(turns: turns, existingNames: existingNames))
     }
 
     private struct EmptyBody: Encodable {}
