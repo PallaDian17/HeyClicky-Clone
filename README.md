@@ -1,11 +1,16 @@
-# HeyClicky Clone
+# Hi Dicky
 
-Our own version of a "talk to your Mac" AI buddy: a menubar app with a notch
+Hi Dicky is our own version of a "talk to your Mac" AI buddy (built by studying HeyClicky): a menubar app with a notch
 HUD, push-to-talk screen-aware voice chat that can draw on the screen, named
 agents that run tasks on the Mac through Claude Code and a computer-use
 driver, dictation, and scheduled routines.
 
-Status: **phase 8 — the personal edition is complete.** First launch runs a
+Status: **phase 8 + desktop Clickys.** Your Clickys also live on the desktop:
+a small strip in the bottom-right corner shows each one, bobbing with its
+current step while it works and holding up its reply when done; click to open
+it, hover to ask it something (Setup → Clickys on the desktop).
+
+Phase 8 — the personal edition is complete. First launch runs a
 welcome tour: make the mascot yours (body, eyes, hat, colour; the same rig
 shows in the notch, Home and every Clicky's avatar), pick a voice with live
 previews, choose power-up skills for the starter Clickys, grant permissions,

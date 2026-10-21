@@ -79,7 +79,7 @@ integrationsRoute.post("/connect", async (c) => {
     const existing = await cx.authConfigs.list({ toolkit, isComposioManaged: true });
     let authConfigId = existing.items[0]?.id;
     if (!authConfigId) {
-      const created = await cx.authConfigs.create(toolkit, { type: "use_composio_managed_auth", name: `HeyClicky Clone ${toolkit}` });
+      const created = await cx.authConfigs.create(toolkit, { type: "use_composio_managed_auth", name: `Hi Dicky ${toolkit}` });
       authConfigId = created.id;
     }
     const request = await cx.connectedAccounts.link(userId(c.var.user), authConfigId, {

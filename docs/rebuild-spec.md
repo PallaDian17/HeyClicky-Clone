@@ -33,6 +33,12 @@ here copies the vendor's code, prompts, art, or keys.
   account. This is enforced in code, before any capture leaves the Mac, not by
   prompt wording. See 3.11.
 
+- **Product name: Hi Dicky** (2026-10-21). User-facing strings, the bundle's
+  display name and the .app filename say Hi Dicky; the executable, bundle id
+  `com.ashish.heyclickyclone`, URL scheme, Application Support folder and the
+  GitHub repo keep their names so TCC grants, Keychain items and data survive.
+  The helpers are still "Clickys".
+
 ## 1. Product definition
 
 A menubar macOS app, Sonoma 14.2+, that gives the user:
@@ -92,6 +98,9 @@ Design choices that differ from or simplify the original:
 - An `NSPanel` at `.statusBar` level, non-activating, spanning the notch
   width when idle and expanding to a card on hover/activity. On non-notch
   displays, anchor top-centre.
+- Hover: an exit reported while the pill is resizing under the pointer is
+  ignored until the pointer is really outside the panel (`setHovering`), which
+  ended the expand/collapse flicker seen in a recording on 2026-10-21.
 - States: idle (mascot eye), listening (waveform + partial transcript),
   thinking, speaking (caption), agent-running (name, step, elapsed, "needs
   you" badge), text-reply (markdown + image strip), dictation-result (preview +
@@ -142,6 +151,17 @@ Design choices that differ from or simplify the original:
   messages. Starter agents are offered at onboarding.
 - History: threads listed from the app-server; archive, rename, move a thread
   into a different agent; organize-history is a backend LLM call over titles.
+
+### 3.3b Clickys on the desktop — built 2026-10-21
+`Dock/AgentDockPanel.swift`: a non-activating floating panel pinned to the
+bottom-right of the main screen (follows screen changes, joins all Spaces),
+one mascot per Clicky. Idle ones blink; a working one bobs and shows its
+current tool step in a bubble (`AgentRuntime.activity`); a finished one
+shows its reply for 25 s. Click opens the Clicky in Home; hover reveals an
+ask box that starts a turn. Toggle in Setup ("Clickys on the desktop",
+`ClickyDockEnabled`, default on). Debug: `heyclickyclone://dock/on|off|snapshot?path=`.
+The original's per-agent HUD also had an artifact pile and a follow-up voice
+plate; those are still open.
 
 ### 3.4 Home Space window
 - Left rail: agents (avatar + unread + usage ring), suggestions, skills,

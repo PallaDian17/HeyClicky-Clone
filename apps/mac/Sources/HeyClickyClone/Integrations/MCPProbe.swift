@@ -24,7 +24,7 @@ enum MCPProbe {
         let initResult = try await call(endpoint, bearer: bearer, session: &sessionID, body: [
             "jsonrpc": "2.0", "id": 1, "method": "initialize",
             "params": ["protocolVersion": "2025-06-18", "capabilities": [:],
-                       "clientInfo": ["name": "HeyClickyClone", "version": AppConfig.version]],
+                       "clientInfo": ["name": "Hi Dicky", "version": AppConfig.version]],
         ])
         let serverName = ((initResult["result"] as? [String: Any])?["serverInfo"] as? [String: Any])?["name"] as? String
         _ = try? await call(endpoint, bearer: bearer, session: &sessionID, body: ["jsonrpc": "2.0", "method": "notifications/initialized"], expectResult: false)

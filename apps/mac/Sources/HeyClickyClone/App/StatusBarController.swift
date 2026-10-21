@@ -22,7 +22,7 @@ final class StatusBarController {
         self.actions = actions
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
-            button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "HeyClicky Clone")
+            button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Hi Dicky")
             button.image?.isTemplate = true
         }
         rebuildMenu()
@@ -73,7 +73,7 @@ final class StatusBarController {
         default:
             break
         }
-        menu.addItem(makeItem("Quit HeyClicky Clone", #selector(quit), key: "q"))
+        menu.addItem(makeItem("Quit Hi Dicky", #selector(quit), key: "q"))
 
         item.menu = menu
     }

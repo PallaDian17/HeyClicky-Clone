@@ -75,7 +75,7 @@ enum ConnectorOAuth {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "client_name": "HeyClicky Clone (\(connectorName))",
+            "client_name": "Hi Dicky (\(connectorName))",
             "redirect_uris": [redirectURI],
             "grant_types": ["authorization_code", "refresh_token"],
             "response_types": ["code"],

@@ -9,7 +9,7 @@ const screenshot = imagePath ? readFileSync(imagePath).toString("base64") : unde
 const body = {
   transcript: question ?? "What am I looking at, and where would I click to allow the microphone?",
   screenshot,
-  appName: "HeyClicky Clone",
+  appName: "Hi Dicky",
   elements: [
     { id: 1, role: "AXButton", title: "Open Settings", frame: { x: 746, y: 256, w: 220, h: 48 } },
     { id: 2, role: "AXButton", title: "Allow", frame: { x: 854, y: 644, w: 112, h: 48 } },

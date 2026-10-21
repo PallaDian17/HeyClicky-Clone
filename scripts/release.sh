@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Cuts a Sparkle release: release build → zip → EdDSA signature → appcast.
 #   APP_VERSION=0.2.0 scripts/release.sh [notes.html]
-# Output: releases/HeyClickyClone-<version>.zip (not committed; attach it to a
+# Output: releases/HiDicky-<version>.zip (not committed; attach it to a
 # GitHub Release) and releases/appcast.xml (committed; SUFeedURL points at it).
 # Needs vendor/sparkle/bin (vendor/fetch-sparkle-tools.sh) and the private key
 # that `generate_keys --account HeyClickyClone` stored in the login Keychain.
@@ -15,13 +15,13 @@ TOOLS="$ROOT/vendor/sparkle/bin"
 
 APP_VERSION="$VERSION" "$ROOT/scripts/build-app.sh" release
 mkdir -p "$OUT"
-ZIP="$OUT/HeyClickyClone-$VERSION.zip"
+ZIP="$OUT/HiDicky-$VERSION.zip"
 rm -f "$ZIP"
-ditto -c -k --sequesterRsrc --keepParent "$ROOT/build/HeyClickyClone.app" "$ZIP"
+ditto -c -k --sequesterRsrc --keepParent "$ROOT/build/Hi Dicky.app" "$ZIP"
 
 # generate_appcast signs every archive in the folder and (re)writes appcast.xml,
-# keeping older entries. Release notes: a sibling HeyClickyClone-<version>.html.
-if [[ -n "${1:-}" ]]; then cp "$1" "$OUT/HeyClickyClone-$VERSION.html"; fi
+# keeping older entries. Release notes: a sibling HiDicky-<version>.html.
+if [[ -n "${1:-}" ]]; then cp "$1" "$OUT/HiDicky-$VERSION.html"; fi
 # Signing key: SPARKLE_ED_KEY_FILE (exported with `generate_keys -x`) for unattended
 # runs, otherwise the login-Keychain item generate_keys created.
 if [[ -n "${SPARKLE_ED_KEY_FILE:-}" ]]; then

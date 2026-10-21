@@ -61,7 +61,7 @@ enum CrashReporter {
 
     static func write(kind: String, text: String) {
         let url = directory.appendingPathComponent("\(kind)-\(Int(Date().timeIntervalSince1970)).txt")
-        let body = "HeyClicky Clone \(AppConfig.version) · macOS \(ProcessInfo.processInfo.operatingSystemVersionString) · \(Date().formatted())\n\n\(text)\n"
+        let body = "Hi Dicky \(AppConfig.version) · macOS \(ProcessInfo.processInfo.operatingSystemVersionString) · \(Date().formatted())\n\n\(text)\n"
         try? body.write(to: url, atomically: true, encoding: .utf8)
     }
 

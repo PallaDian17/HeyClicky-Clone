@@ -15,7 +15,7 @@ final class OnboardingWindowController: NSWindowController {
         model = OnboardingModel(app: app)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 520),
                               styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
-        window.title = "Welcome to HeyClicky Clone"
+        window.title = "Welcome to Hi Dicky"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false
@@ -110,8 +110,13 @@ final class OnboardingModel: ObservableObject {
             do {
                 let data = try await app.backend.voicePreview(voice: name)
                 guard previewing == name else { return }
-                player = try AVAudioPlayer(data: data)
-                player?.play()
+                let p = try AVAudioPlayer(data: data, fileTypeHint: "mp3")
+                p.volume = 1
+                p.prepareToPlay()
+                player = p
+                let ok = p.play()
+                Log.app.info("voice preview \(name, privacy: .public): play=\(ok) duration=\(p.duration, format: .fixed(precision: 1))s device=\(p.currentDevice ?? "default", privacy: .public)")
+                if !ok { previewError = "Couldn't start playback. Is an output device selected?" }
             } catch {
                 previewError = "Preview unavailable: \((error as? LocalizedError)?.errorDescription ?? "\(error)")"
             }
@@ -127,8 +132,21 @@ final class OnboardingModel: ObservableObject {
 
     // MARK: - Mic check
 
+    var micAuthorized: Bool { AVCaptureDevice.authorizationStatus(for: .audio) == .authorized }
+
     func startMic() {
-        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized, micEngine == nil else { return }
+        guard micEngine == nil else { return }
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        if status == .notDetermined {
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                Task { @MainActor in
+                    self.app.permissions.refresh()
+                    if granted { self.startMic() }
+                }
+            }
+            return
+        }
+        guard status == .authorized else { return }
         let engine = AVAudioEngine()
         let input = engine.inputNode
         let format = input.inputFormat(forBus: 0)
@@ -147,6 +165,7 @@ final class OnboardingModel: ObservableObject {
         do {
             try engine.start()
             micEngine = engine
+            Log.app.info("mic check listening on \(input.inputFormat(forBus: 0).sampleRate)Hz")
         } catch {
             Log.app.error("mic check failed: \(String(describing: error), privacy: .public)")
         }
@@ -245,7 +264,7 @@ struct OnboardingView: View {
         case .micCheck:
             VStack(spacing: 18) {
                 title("Say something", "A quick check that I can hear you.")
-                if AVCaptureDevice.authorizationStatus(for: .audio) == .authorized {
+                if permissions.status(.microphone) == .granted || model.micAuthorized {
                     HStack(spacing: 4) {
                         ForEach(0..<24, id: \.self) { i in
                             let on = Double(i) / 24 < model.micLevel
@@ -254,12 +273,15 @@ struct OnboardingView: View {
                     }
                     Text(model.micHeardYou ? "Heard you loud and clear." : "Listening…").font(.callout).foregroundStyle(model.micHeardYou ? .green : .white.opacity(0.6))
                 } else {
-                    Text("Microphone isn't allowed yet. Go back one step and allow it, or skip this for now.")
-                        .font(.callout).foregroundStyle(.orange)
+                    Text("Microphone isn't allowed yet.").font(.callout).foregroundStyle(.orange)
+                    Button("Allow microphone") { permissions.request(.microphone) }
                 }
             }
             .onAppear { model.startMic() }
             .onDisappear { model.stopMic() }
+            .onChange(of: permissions.status(.microphone)) { _, status in
+                if status == .granted { model.startMic() }
+            }
         case .tutorial:
             VStack(alignment: .leading, spacing: 16) {
                 title("Three gestures", "That's all there is to learn.")

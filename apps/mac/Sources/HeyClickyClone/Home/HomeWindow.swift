@@ -12,7 +12,7 @@ final class HomeWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "HeyClicky Clone"
+        window.title = "Hi Dicky"
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 760, height: 480)
@@ -68,7 +68,7 @@ struct HomeView: View {
                     .padding(4)
                     .background(RoundedRectangle(cornerRadius: 14).fill(.black))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("HeyClicky Clone").font(.title2.weight(.semibold))
+                    Text("Hi Dicky").font(.title2.weight(.semibold))
                     Text("v\(AppConfig.version) · talk, dictate, Clickys, routines, integrations")
                         .font(.callout).foregroundStyle(.secondary)
                 }
@@ -125,6 +125,16 @@ struct HomeView: View {
 
             section("Character") {
                 CharacterEditorView(character: $characters.character, compact: true)
+            }
+
+            section("Clickys on the desktop") {
+                HStack {
+                    Text("Show your Clickys in the bottom-right corner of the screen. Click one to open it; hover to ask it something.")
+                        .font(.callout)
+                    Spacer()
+                    Toggle("", isOn: Binding(get: { AgentDockPanel.isEnabled }, set: { app.dock.setVisible($0); AgentDockPanel.isEnabled = $0 }))
+                        .toggleStyle(.switch)
+                }
             }
 
             section("Updates") {

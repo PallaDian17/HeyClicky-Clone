@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Builds the Swift package and assembles build/HeyClickyClone.app.
+# Builds the Swift package and assembles "build/Hi Dicky.app" (executable HeyClickyClone,
+# bundle id com.ashish.heyclickyclone: those stay so TCC grants and data survive the rename).
 # Usage: scripts/build-app.sh [debug|release]   (default: debug)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG="${1:-debug}"
 APP_NAME="HeyClickyClone"
+BUNDLE_NAME="${BUNDLE_NAME:-Hi Dicky}"
 VERSION="${APP_VERSION:-0.1.0}"
 BUILD_NUMBER="${APP_BUILD:-$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)}"
 
@@ -29,7 +31,7 @@ cd "$ROOT"
 swift build -c "$CONFIG" --product "$APP_NAME"
 
 BIN="$(swift build -c "$CONFIG" --show-bin-path)/$APP_NAME"
-APP="$ROOT/build/$APP_NAME.app"
+APP="$ROOT/build/$BUNDLE_NAME.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"

@@ -34,6 +34,9 @@ final class NotchViewModel: ObservableObject {
     @Published var character: ClickyCharacter = ClickyCharacter.loadUser()
 
     private var dismissTask: Task<Void, Never>?
+    private var hoverTask: Task<Void, Never>?
+    /// Provided by the window: is the pointer over the panel right now?
+    var isMouseInside: (() -> Bool)?
     private var generation = 0
 
     init(geometry: NotchGeometry) {
@@ -88,6 +91,26 @@ final class NotchViewModel: ObservableObject {
             try? await Task.sleep(for: .seconds(seconds))
             guard let self, !Task.isCancelled, self.generation == gen else { return }
             self.collapse()
+        }
+    }
+
+    /// SwiftUI reports a hover exit the moment the pill resizes under the pointer,
+    /// which used to collapse and re-expand it in a loop. An exit only counts
+    /// once the pointer is really outside the panel.
+    func setHovering(_ inside: Bool) {
+        hoverTask?.cancel()
+        if inside {
+            hovering = true
+            return
+        }
+        hoverTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            guard let self, !Task.isCancelled else { return }
+            while self.isMouseInside?() == true {
+                try? await Task.sleep(for: .milliseconds(150))
+                if Task.isCancelled { return }
+            }
+            self.hovering = false
         }
     }
 

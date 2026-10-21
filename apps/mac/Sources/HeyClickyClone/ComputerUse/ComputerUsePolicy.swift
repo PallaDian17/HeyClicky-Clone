@@ -46,7 +46,7 @@ struct ComputerUsePolicy {
     func decide(tool: String, input: [String: Any]) -> PermissionPolicy.Decision {
         guard Self.isComputerUse(tool) else { return .allow }
         guard consentGranted else {
-            return .deny("Computer use is turned off. The user can enable it in HeyClicky Clone → Setup → Computer use.")
+            return .deny("Computer use is turned off. The user can enable it in Hi Dicky → Setup → Computer use.")
         }
         let name = String(tool.dropFirst(Self.toolPrefix.count))
         if Self.alwaysDenied.contains(name) {

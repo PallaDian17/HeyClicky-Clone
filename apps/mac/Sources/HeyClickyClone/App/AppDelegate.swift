@@ -23,6 +23,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let characters = CharacterStore()
     private(set) lazy var updates = UpdateController()
     private var onboardingWindow: OnboardingWindowController?
+    private(set) lazy var dock = AgentDockPanel(agents: agents) { [weak self] id in
+        self?.openHome()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { NotificationCenter.default.post(name: .homeSpaceSelectAgent, object: id) }
+    }
     let routines = RoutineStore()
     private(set) lazy var scheduler = RoutineScheduler(store: routines, agents: agents, notch: notch.model)
     private(set) lazy var suggestions = MorningSuggestions(backend: backend, agents: agents, routines: routines, scheduler: scheduler, notch: notch.model)
@@ -68,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
 
         _ = updates
+        if AgentDockPanel.isEnabled { dock.show() }
         NotificationCenter.default.addObserver(forName: .clickyCharacterChanged, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.notch.model.character = ClickyCharacter.loadUser() }
         }
@@ -213,6 +218,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             auth.handle(callbackURL: url)
         case "hud":
             handleDebugHUDURL(url)
+        case "dock":
+            // `heyclickyclone://dock/on|off|snapshot?path=`
+            switch url.lastPathComponent {
+            case "on": AgentDockPanel.isEnabled = true; dock.show()
+            case "off": AgentDockPanel.isEnabled = false; dock.hide()
+            case "snapshot":
+                let path = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "path" })?.value ?? "/tmp/dock.png"
+                dock.snapshot(to: URL(fileURLWithPath: path))
+            default: break
+            }
+        case "voice":
+            // `heyclickyclone://voice/preview?voice=marin` plays a sample through the same path as onboarding.
+            let v = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "voice" })?.value ?? "marin"
+            if onboardingWindow == nil { onboardingWindow = OnboardingWindowController(app: self) }
+            onboardingWindow?.model.preview(v)
         case "onboarding":
             // `heyclickyclone://onboarding` · `/reset` (forget the flag) · `/step?n=3`
             if url.lastPathComponent == "reset" { UserDefaults.standard.removeObject(forKey: OnboardingWindowController.onboardedKey) }

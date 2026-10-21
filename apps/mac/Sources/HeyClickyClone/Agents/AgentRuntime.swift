@@ -13,6 +13,9 @@ final class AgentRuntime: ObservableObject {
 
     @Published private(set) var transcripts: [UUID: [TranscriptEntry]] = [:]
     @Published private(set) var modelLabel: String?
+    /// What each Clicky is doing right now, for the desktop dock: a tool step while running, the reply for a while after.
+    @Published private(set) var activity: [UUID: String] = [:]
+    private var activityClear: [UUID: Task<Void, Never>] = [:]
 
     private var runners: [UUID: ClaudeCodeRunner] = [:]
     private var starting: Set<UUID> = []                   // turns gathering their MCP servers
@@ -51,6 +54,7 @@ final class AgentRuntime: ObservableObject {
     func send(_ text: String, to agentID: UUID, routine: Routine? = nil) {
         guard let agent = store.agent(id: agentID), !isRunning(agentID) else { return }
         starting.insert(agentID)
+        setActivity(agentID, "Starting…")
         append(.init(role: .user, text: text), to: agentID)
         routineTurns[agentID] = routine?.id
         notch.set(.agent(name: agent.name, step: routine.map { "Routine: \($0.title)" } ?? "Starting…"))
@@ -109,7 +113,7 @@ final class AgentRuntime: ObservableObject {
     /// Standing rules every turn carries, on top of the persona in the folder's CLAUDE.md.
     private static func turnPreamble(for agent: Agent, computerUse: Bool, routine: Routine? = nil, integrations: IntegrationsHost.TurnServers = .init()) -> String {
         var text = """
-        You are \(agent.name), a helper running inside HeyClicky Clone on this person's Mac. Your working directory is your own folder; its CLAUDE.md holds your persona and dated notes. Keep finished work in output/ and scratch in tmp/. You cannot ask the user questions mid-turn, so make reasonable choices and say what you assumed. Your final message is shown in a small card and may be read aloud: lead with the result in plain words, keep it short, and say what did not work.
+        You are \(agent.name), a helper running inside Hi Dicky on this person's Mac. Your working directory is your own folder; its CLAUDE.md holds your persona and dated notes. Keep finished work in output/ and scratch in tmp/. You cannot ask the user questions mid-turn, so make reasonable choices and say what you assumed. Your final message is shown in a small card and may be read aloud: lead with the result in plain words, keep it short, and say what did not work.
 
         You have no scheduler of your own, and you must not build or look for one: launchd, cron, crontab, background scripts, sleep loops, the cron/schedule/loop tools and the "schedule" and "loop" skills are all disabled here on purpose (do not load them; do not say scheduling is unavailable). The app runs repeating work for you, and it works. When the user asks for something to happen repeatedly (every morning, hourly, each Monday) or asks to "set up a routine", do NOT run the task now and do NOT write any script; instead end your reply with exactly one tag on its own line:
         <ROUTINE>{"title":"short name","task":"the exact request to run each time","every_minutes":1440}</ROUTINE>
@@ -169,6 +173,7 @@ final class AgentRuntime: ObservableObject {
                 append(.init(role: .assistant, text: text), to: agentID)
             }
         case .toolStarted(let id, let name, let summary):
+            setActivity(agentID, summary)
             streamingEntry[agentID] = nil
             let entry = TranscriptEntry(role: .command, text: summary, detail: "", streaming: true)
             toolEntries[id] = entry.id
@@ -224,6 +229,7 @@ final class AgentRuntime: ObservableObject {
         store.saveTranscript(t, for: updated)
 
         let summary = finalText.isEmpty ? (lastAssistant ?? "Done.") : finalText
+        setActivity(agentID, isError ? "Hit a problem; see Home." : String(summary.prefix(140)), clearAfter: 25)
         if let routineID {
             onRoutineTurnFinished?(routineID, isError ? finalText : summary, isError)
             let quiet = summary.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("nothing new")
@@ -240,6 +246,17 @@ final class AgentRuntime: ObservableObject {
             notch.set(.notice("\(agent.name): \(finalText.prefix(120))"), autoDismissAfter: 8)
         } else {
             notch.set(.reply("\(agent.name): \(summary)"), autoDismissAfter: 12)
+        }
+    }
+
+    private func setActivity(_ agentID: UUID, _ text: String, clearAfter seconds: TimeInterval? = nil) {
+        activity[agentID] = text
+        activityClear[agentID]?.cancel()
+        guard let seconds else { return }
+        activityClear[agentID] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard let self, !Task.isCancelled else { return }
+            self.activity[agentID] = nil
         }
     }
 

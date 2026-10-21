@@ -29,7 +29,7 @@ struct NotchRootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
-        .onHover { model.hovering = $0 }
+        .onHover { model.setHovering($0) }
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: model.state)
         .animation(.easeOut(duration: 0.2), value: model.hovering)
         .foregroundStyle(.white)

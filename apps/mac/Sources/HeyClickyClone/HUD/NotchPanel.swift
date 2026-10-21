@@ -35,6 +35,10 @@ final class NotchWindowManager {
         panel.acceptsMouseMovedEvents = true
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
         panel.contentView = NSHostingView(rootView: NotchRootView(model: model))
+        model.isMouseInside = { [weak panel] in
+            guard let panel else { return false }
+            return panel.frame.insetBy(dx: -4, dy: -4).contains(NSEvent.mouseLocation)
+        }
 
         Publishers.CombineLatest(model.$state, model.$hovering)
             .dropFirst()

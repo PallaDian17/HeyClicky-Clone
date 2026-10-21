@@ -1,6 +1,6 @@
 import Foundation
 
-/// Thin JSON client for the HeyClicky Clone backend. Attaches the Supabase
+/// Thin JSON client for the Hi Dicky backend. Attaches the Supabase
 /// access token when one is available.
 final class BackendClient {
     struct ChatRequest: Encodable {

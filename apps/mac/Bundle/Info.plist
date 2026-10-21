@@ -5,7 +5,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>HeyClicky Clone</string>
+    <string>Hi Dicky</string>
     <key>CFBundleExecutable</key>
     <string>HeyClickyClone</string>
     <key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>HeyClickyClone</string>
+    <string>Hi Dicky</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -40,11 +40,11 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>HeyClicky Clone uses your microphone so you can talk to it.</string>
+    <string>Hi Dicky uses your microphone so you can talk to it.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>HeyClicky Clone transcribes your voice when you talk to it.</string>
+    <string>Hi Dicky transcribes your voice when you talk to it.</string>
     <key>NSScreenCaptureUsageDescription</key>
-    <string>HeyClicky Clone needs Screen Recording to see your screen when you press the hotkey.</string>
+    <string>Hi Dicky needs Screen Recording to see your screen when you press the hotkey.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>
