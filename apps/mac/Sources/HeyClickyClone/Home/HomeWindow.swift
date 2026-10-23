@@ -46,6 +46,7 @@ struct HomeView: View {
     @AppStorage(AgentRuntime.notificationsKey) private var notificationsOn = true
     @AppStorage(DictationController.localeKey) private var dictationLocale = ""
     @AppStorage(OnboardingModel.languageKey) private var talkLanguage = "en"
+    @AppStorage(CursorCompanionManager.modeKey) private var cursorMode = "talk"
     @State private var newConnectorName = ""
     @State private var newConnectorURL = ""
     @State private var newConnectorAuth: CustomConnector.Auth = .oauth
@@ -122,6 +123,15 @@ struct HomeView: View {
                     .labelsHidden().frame(width: 160)
                     Text("Clicky speaks and transcribes in this language only (English by default). Takes effect on the next talk.").font(.caption).foregroundStyle(.secondary)
                 }
+                HStack(spacing: 8) {
+                    Text("Cursor tracker").font(.caption)
+                    Picker("", selection: Binding(get: { CursorCompanionManager.Mode(rawValue: cursorMode) ?? .talk },
+                                                  set: { cursorMode = $0.rawValue; app.cursor.apply(mode: $0) })) {
+                        ForEach(CursorCompanionManager.Mode.allCases) { Text($0.label).tag($0) }
+                    }
+                    .labelsHidden().frame(width: 220)
+                    Text("The blue ring beside the mouse: waveform while listening, spinner while thinking, the answer in a bubble.").font(.caption).foregroundStyle(.secondary)
+                }
             }
 
             section("Hotkey") {
@@ -163,6 +173,23 @@ struct HomeView: View {
                     Spacer()
                     if updates.isChecking { ProgressView().controlSize(.small) }
                     Button("Check for Updates…") { app.checkForUpdates() }.disabled(!updates.isConfigured)
+                }
+                Divider().padding(.vertical, 2)
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("This build: \(updates.stamp)").font(.caption).textSelection(.enabled)
+                        if !updates.repoStatus.isEmpty {
+                            Text(updates.repoStatus).font(.caption).foregroundStyle(updates.repoIsAhead ? Color.orange : Color.secondary)
+                        } else if AppConfig.repoURL == nil {
+                            Text("No source checkout found next to this app; updates come through Sparkle.").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    if AppConfig.repoURL != nil {
+                        if updates.isUpdating { ProgressView().controlSize(.small) }
+                        Button("Re-check") { updates.checkRepo() }.controlSize(.small)
+                        Button("Update from main") { updates.updateFromRepo() }.controlSize(.small).disabled(updates.isUpdating)
+                    }
                 }
             }
 

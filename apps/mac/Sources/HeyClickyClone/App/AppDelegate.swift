@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let notch = NotchWindowManager()
     let hotkey = HotkeyMonitor()
     let overlay = PointingOverlayManager()
+    let cursor = CursorCompanionManager()
     private(set) lazy var backend: BackendClient = {
         let client = BackendClient(baseURL: config.backendURL)
         client.tokenProvider = { [weak self] in await self?.auth.accessToken() }
@@ -52,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBar = StatusBarController(actions: self)
         notch.show()
         wireNotch()
+        cursor.bind(to: notch.model)
         wireHotkey()
         startHotkeyWhenPermitted()
 
@@ -223,6 +225,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             auth.handle(callbackURL: url)
         case "hud":
             handleDebugHUDURL(url)
+        case "cursor":
+            // `cursor/demo?state=listening|thinking|speaking|dictating|idle&text=…` · `cursor/snapshot?path=` · `cursor/mode?value=talk|always|off`
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            func q(_ n: String) -> String? { items.first(where: { $0.name == n })?.value }
+            switch url.lastPathComponent {
+            case "demo":
+                switch q("state") {
+                case "listening": cursor.show(.listening(hint: q("text") ?? "Talk, or circle anything to ask about it"))
+                case "thinking": cursor.show(.thinking)
+                case "dictating": cursor.show(.dictating(q("text") ?? ""))
+                case "idle": cursor.show(.idle)
+                case "hidden": cursor.show(.hidden)
+                default: cursor.show(.speaking(q("text") ?? "That's the Deploy button; it pushes the current branch."))
+                }
+            case "snapshot":
+                cursor.snapshot(to: URL(fileURLWithPath: q("path") ?? "/tmp/cursor.png"))
+            case "mode":
+                if let m = CursorCompanionManager.Mode(rawValue: q("value") ?? "") { cursor.apply(mode: m) }
+            default: break
+            }
         case "dock":
             // `heyclickyclone://dock/on|off|snapshot?path=`
             switch url.lastPathComponent {

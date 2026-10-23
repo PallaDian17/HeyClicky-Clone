@@ -5,7 +5,13 @@ HUD, push-to-talk screen-aware voice chat that can draw on the screen, named
 agents that run tasks on the Mac through Claude Code and a computer-use
 driver, dictation, and scheduled routines.
 
-Status: **circle-to-ask (2026-10-23).** Hold the talk key and circle
+Status: **cursor tracker + build provenance (2026-10-23).** A blue ring now
+rides beside the mouse while you talk or dictate: waveform while listening,
+spinner while thinking, the answer in a bubble next to the pointer. Setup →
+Updates shows exactly which commit the running app was built from and offers
+"Update from main"; `scripts/update.sh` does the same from a terminal.
+
+Earlier: **circle-to-ask (2026-10-23).** Hold the talk key and circle
 anything on screen: a bar offers Ask, Hand to a Clicky, or Copy. Ask sends
 the circled region (plus whatever you said, or "what is this?") and the
 answer comes back spoken and pointed at.

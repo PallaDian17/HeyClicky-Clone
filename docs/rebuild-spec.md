@@ -139,6 +139,32 @@ every `response.create` ("Speak in English only"). Setup → Talk → Language
 (`ClickyTalkLanguage`, default `en`) changes all three on the next talk;
 the backend default is `REALTIME_LANGUAGE`.
 
+### 3.2c Cursor tracker — built 2026-10-23
+`Overlay/CursorCompanion.swift`: the blue ring that rides beside the mouse
+(click-through panel at screen-saver level, repositioned at 60 Hz from
+`NSEvent.mouseLocation`, clamped to the screen). It mirrors the notch state,
+so there is one source of truth: waveform in the ring while listening (with a
+3.5 s hint "Talk, or circle anything to ask about it"), a spinner while
+thinking, the answer in a bubble next to the ring while speaking, a purple
+mic dot with the live transcript while dictating. Setup → Talk → Cursor
+tracker: while talking or dictating (default), always (an idle ring too, and
+agent steps and notices in the bubble), or off. The original's
+`BlueCursorView` / `CursorMessageBubbleView` were first read as the
+point-at-target overlay only; this is the mouse-following half.
+Debug: `cursor/demo?state=listening|thinking|speaking|dictating|idle|hidden&text=`,
+`cursor/snapshot?path=`, `cursor/mode?value=talk|always|off`.
+
+### 3.8c Build provenance — built 2026-10-23
+`build-app.sh` stamps `GitCommit` (short SHA, `+local` when the tree was
+dirty), `BuildDate` and `BuildConfiguration` into Info.plist; Setup → Updates
+shows "This build: v… build … · commit · config · built …", then compares
+with the repo next to the bundle (`git fetch` + rev-list) and says whether
+the repo or origin/main is ahead. "Update from main" runs
+`scripts/update.sh` (pull --rebase --autostash, build, quit, relaunch),
+logging to Application Support/update.log; the script also works from a
+terminal (`--no-pull` to just rebuild). Sparkle stays the path for a
+distributed build.
+
 ### 3.2b Circle-to-ask — built 2026-10-23
 `Talk/RegionSelectOverlay.swift`. While the talk key is held a transparent
 full-screen panel takes the mouse: drag or circle something and the stroke

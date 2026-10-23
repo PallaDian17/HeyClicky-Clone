@@ -11,6 +11,19 @@ struct AppConfig {
 
     static let appName = "HeyClickyClone"
     static var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0" }
+    static var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0" }
+    /// Short commit the running bundle was built from ("+local" when the tree was dirty).
+    static var gitCommit: String { Bundle.main.infoDictionary?["GitCommit"] as? String ?? "unknown" }
+    static var buildDate: Date? {
+        (Bundle.main.infoDictionary?["BuildDate"] as? String).flatMap { ISO8601DateFormatter().date(from: $0) }
+    }
+    static var buildConfiguration: String { Bundle.main.infoDictionary?["BuildConfiguration"] as? String ?? "?" }
+    /// Repo the app was built from, when it still exists on this Mac (dev builds).
+    static var repoURL: URL? {
+        let candidates = [Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent(),
+                          FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("github/HeyClicky-Clone")]
+        return candidates.first { FileManager.default.fileExists(atPath: $0.appendingPathComponent("scripts/update.sh").path) }
+    }
     /// Optional `--model` for agent turns; nil lets Claude Code pick its default.
     var agentModel: String?
 

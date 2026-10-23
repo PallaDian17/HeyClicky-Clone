@@ -58,6 +58,12 @@
     <true/>
     <key>SUScheduledCheckInterval</key>
     <integer>86400</integer>
+    <key>GitCommit</key>
+    <string>__GIT_COMMIT__</string>
+    <key>BuildDate</key>
+    <string>__BUILD_DATE__</string>
+    <key>BuildConfiguration</key>
+    <string>__CONFIG__</string>
     <key>SentryDSN</key>
     <string>__SENTRY_DSN__</string>
     <key>BackendURL</key>

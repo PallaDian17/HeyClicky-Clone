@@ -15,7 +15,7 @@ Legend: ✅ matches · 🟡 partial · ❌ not built · ⛔ excluded by decision
 |---|---|---|---|
 | Persistent notch panel, morphs between states | `NotchPanel` + `NotchViewModel` states idle / listening / thinking / prompt / reply / agent / notice / dictating / dictated / suggestions | ✅ | all states rendered via `hud/<state>` + `hud/snapshot` |
 | Idle eye | User's own character (rig shared with Home and the dock) | ✅ | hover pill captured |
-| Hover-dwell ring, corner glow | Hover expands the pill; no ring/glow art | 🟡 | hover stability verified with a parked pointer (3 captures, no flicker) |
+| Hover-dwell ring, corner glow | Hover expands the pill; the cursor tracker's ring covers the dwell ring (no corner glow art) | 🟡 | hover stability verified with a parked pointer (3 captures, no flicker) |
 | Text input surface | Prompt box, keyboard focus in a non-activating panel | ✅ | typed "What time is it…" with synthetic keys → `/v1/chat` 200 → reply card |
 | Text response with gallery strip | Reply card, text only | 🟡 | reply card captured |
 | Agent surface + peek (file pile with drag-out) | Agent state in the notch; file pile lives in Home's output column (Quick Look + drag-out) | 🟡 | output column verified in phase 5 |
@@ -37,6 +37,7 @@ Legend: ✅ matches · 🟡 partial · ❌ not built · ⛔ excluded by decision
 | Reads the whole document under view | Accessibility harvest of the frontmost window (elements, URLs, secure fields) | 🟡 | `privacy/status` shows element counts |
 | Realtime voice answer | OpenAI Realtime (`gpt-realtime`), voice chosen in onboarding/Setup | ✅ | `talk/hold`: session minted, connected, mic capture at 48 kHz; 4 s of silence produced an empty transcript (expected) |
 | Blue cursor / sketch stroke pointing, `[TARGET]` | Pointing overlay from `element_id` / `box` in the chat reply | ✅ | phase 2 |
+| Blue cursor companion + cursor message bubble (follows the mouse) | Cursor tracker: ring beside the pointer with waveform / spinner / answer bubble / mic dot, mirrors the notch | ✅ | rendered in every state; window followed three pointer moves; a real hold showed the listening ring |
 | Region select during talk (drag a region, post-drag action bar, hand-off or copy) | Circle-to-ask: stroke overlay, Ask / Hand to / Copy bar, region + crop sent to the model; Ask explains what/does/how; Tell me more hands it to Scout | ✅ | synthetic circle drag during a real hold → Ask → reply + pointer; copy → PNG; hand-off → Scout |
 | Click-to-advance turns | Not built | ❌ | — |
 | Response card with photo gallery, Place/Stock widgets, image + web search | Not built (needs `/places`, `/web-search`, image search backends) | ❌ | — |

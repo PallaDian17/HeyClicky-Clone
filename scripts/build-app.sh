@@ -10,6 +10,11 @@ APP_NAME="HeyClickyClone"
 BUNDLE_NAME="${BUNDLE_NAME:-Hi Dicky}"
 VERSION="${APP_VERSION:-0.1.0}"
 BUILD_NUMBER="${APP_BUILD:-$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)}"
+# Provenance shown in Setup -> Updates: which commit this build came from, whether the
+# tree was dirty, and when it was built.
+GIT_COMMIT="$(git -C "$ROOT" rev-parse --short=9 HEAD 2>/dev/null || echo unknown)"
+if [[ -n "$(git -C "$ROOT" status --porcelain 2>/dev/null)" ]]; then GIT_COMMIT="$GIT_COMMIT+local"; fi
+BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # Secrets for the bundle come from .env (gitignored) or the environment.
 if [[ -f "$ROOT/.env" ]]; then
@@ -78,6 +83,9 @@ sed -e "s|__VERSION__|$VERSION|" \
     -e "s|__SPARKLE_FEED_URL__|$SPARKLE_FEED_URL|" \
     -e "s|__SPARKLE_PUBLIC_KEY__|$SPARKLE_PUBLIC_KEY|" \
     -e "s|__SENTRY_DSN__|$SENTRY_DSN|" \
+    -e "s|__GIT_COMMIT__|$GIT_COMMIT|" \
+    -e "s|__BUILD_DATE__|$BUILD_DATE|" \
+    -e "s|__CONFIG__|$CONFIG|" \
     "$ROOT/apps/mac/Bundle/Info.plist" > "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
@@ -98,4 +106,4 @@ codesign --force --sign "$IDENTITY" \
   --entitlements "$ROOT/apps/mac/Bundle/Entitlements.plist" \
   "$APP"
 
-echo "Built $APP ($CONFIG, v$VERSION build $BUILD_NUMBER)"
+echo "Built $APP ($CONFIG, v$VERSION build $BUILD_NUMBER, commit $GIT_COMMIT, $BUILD_DATE)"
