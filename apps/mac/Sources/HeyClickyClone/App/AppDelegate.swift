@@ -64,6 +64,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         scheduler.start()
         suggestions.start()
         agents.integrations = integrations
+        agents.isHomeInFront = { [weak self] in
+            guard let self, NSApp.isActive, let home = self.homeWindow?.window else { return false }
+            return home.isKeyWindow
+        }
         Task { await integrations.refreshComposio() }
 
         auth.$state
@@ -186,7 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .escape:
             talk.cancel()
             dictation.cancel()
-            notch.model.collapse()
+            if agents.stopAll() { notch.model.set(.notice("Stopping…"), autoDismissAfter: 2) } else { notch.model.collapse() }
         case .dictationBegan:
             guard talk.phase == .idle else { return }
             dictation.begin()
@@ -221,6 +225,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "dock":
             // `heyclickyclone://dock/on|off|snapshot?path=`
             switch url.lastPathComponent {
+            case "ask":
+                if let slug = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "slug" })?.value,
+                   let agent = agents.store.agents.first(where: { $0.slug == slug }) { dock.ask(agent.id) }
             case "on": AgentDockPanel.isEnabled = true; dock.show()
             case "off": AgentDockPanel.isEnabled = false; dock.hide()
             case "snapshot":
@@ -253,6 +260,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openHome()
             if url.lastPathComponent == "setup" {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { NotificationCenter.default.post(name: .homeSpaceSetup, object: nil) }
+            } else if ["skills", "suggestions"].contains(url.lastPathComponent) {
+                let page = url.lastPathComponent
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { NotificationCenter.default.post(name: .homeSpacePage, object: page) }
             }
         case "permissions":
             showPermissions()
@@ -287,6 +297,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     agents.send(q("text") ?? "Say hello in one sentence.", to: agent.id)
                     openHome()
                 }
+            case "stop":
+                if let slug = q("slug"), let agent = agents.store.agents.first(where: { $0.slug == slug }) { agents.stop(agent.id) } else { agents.stopAll() }
+            case "thread":
+                if let slug = q("slug"), let agent = agents.store.agents.first(where: { $0.slug == slug }) { agents.newThread(agent.id); openHome() }
+            case "rename":
+                if let slug = q("slug"), let agent = agents.store.agents.first(where: { $0.slug == slug }), let name = q("name") { agents.store.rename(agent, to: name) }
             default: break
             }
         case "computer-use":
@@ -309,10 +325,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         case "talk":
-            // `open "heyclickyclone://talk?text=what%20is%20this"` runs a full typed turn.
-            let text = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                .queryItems?.first(where: { $0.name == "text" })?.value ?? "What am I looking at?"
-            talk.ask(text)
+            // `talk?text=…` runs a typed turn; `talk/hold?seconds=3` presses and releases the talk gesture.
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            if url.lastPathComponent == "hold" {
+                let seconds = Double(items.first(where: { $0.name == "seconds" })?.value ?? "") ?? 3
+                talk.beginHold()
+                DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in self?.talk.endHold() }
+            } else {
+                talk.ask(items.first(where: { $0.name == "text" })?.value ?? "What am I looking at?")
+            }
         case "integrations":
             handleIntegrationsURL(url)
         case "dictate":

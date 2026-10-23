@@ -152,16 +152,41 @@ Design choices that differ from or simplify the original:
 - History: threads listed from the app-server; archive, rename, move a thread
   into a different agent; organize-history is a backend LLM call over titles.
 
-### 3.3b Clickys on the desktop — built 2026-10-21
+### 3.3a Turn controls — built 2026-10-23
+Steer: sending while a Clicky is mid-turn writes another user message to the
+running `claude` process (stream-json stdin), which folds it into the turn;
+Home's composer, the dock's ask box and `agent/send` all do this. Interrupt:
+Stop button, ⌘., Esc in Home, the global Esc hotkey (`AgentRuntime.stopAll`),
+`agent/stop?slug=`. Threads: "New conversation" archives the transcript to
+`history/<timestamp>.json` and forgets the Claude session (`agent/thread`).
+Rename: roster + persona heading (`agent/rename`). Finish: system sound
+(Pop/Glass/Funk, toggle) and a macOS notification when Home is not the active
+window (first use asks for notification permission). Setup → Developer:
+Claude model picker (`ClickyAgentModel`, next turn), sounds and notifications
+toggles. See `docs/feature-audit.md` for the full comparison with the original.
+
+### 3.3b Clickys on the desktop — built 2026-10-21, reworked 2026-10-23
 `Dock/AgentDockPanel.swift`: a non-activating floating panel pinned to the
 bottom-right of the main screen (follows screen changes, joins all Spaces),
 one mascot per Clicky. Idle ones blink; a working one bobs and shows its
 current tool step in a bubble (`AgentRuntime.activity`); a finished one
-shows its reply for 25 s. Click opens the Clicky in Home; hover reveals an
-ask box that starts a turn. Toggle in Setup ("Clickys on the desktop",
+shows its reply for 25 s. Click a mascot to open its ask box (the panel is a
+key-capable non-activating `DockPanelWindow`, so typing works while another
+app stays frontmost); Return sends or steers; Esc closes; click the name to
+open Home. The panel frame is fixed per Clicky count so nothing moves under
+the pointer (the hover-driven first version fought the cursor). Verified
+with a real mouse click + synthetic typing → turn → reply bubble. Toggle in Setup ("Clickys on the desktop",
 `ClickyDockEnabled`, default on). Debug: `heyclickyclone://dock/on|off|snapshot?path=`.
 The original's per-agent HUD also had an artifact pile and a follow-up voice
 plate; those are still open.
+
+### 3.4a Skills and Suggestions pages — built 2026-10-23
+Sidebar rows under the Clickys. Skills: the bundled power-ups with a switch
+per Clicky (installs/removes `.claude/skills/<name>`), Open to read the
+SKILL.md. Suggestions: today's cards with Yes/No, "Ask again", earlier
+answers (`MorningSuggestions` is observable; cards fetched with
+`present: false` go only to the page). Routes `home/skills`, `home/suggestions`.
+Setup → Dictation gained a language picker (`ClickyDictationLocale`).
 
 ### 3.4 Home Space window
 - Left rail: agents (avatar + unread + usage ring), suggestions, skills,

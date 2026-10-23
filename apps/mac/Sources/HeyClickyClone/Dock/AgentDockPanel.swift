@@ -2,10 +2,18 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// The Clickys on the desktop: a small always-on-top strip in the bottom-right
+/// Borderless panel that can take the keyboard without activating the app, so
+/// the ask box under a Clicky accepts typing while another app stays frontmost.
+final class DockPanelWindow: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
+/// The Clickys on the desktop: an always-on-top strip in the bottom-right
 /// corner of the main screen, one mascot per Clicky. Idle ones blink; a working
 /// one bobs with its current step in a bubble; a finished one shows its reply
-/// for a while. Click opens the Clicky in Home; hover reveals an ask box.
+/// for a while. Click a Clicky to open its ask box and type; Return sends (or
+/// steers a running turn); Esc closes it; click the name to open it in Home.
 @MainActor
 final class AgentDockPanel {
     static let enabledKey = "ClickyDockEnabled"
@@ -14,13 +22,13 @@ final class AgentDockPanel {
         set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
     }
 
-    private let panel: NSPanel
-    private let model: AgentDockModel
+    private let panel: DockPanelWindow
+    let model: AgentDockModel
     private var cancellables = Set<AnyCancellable>()
 
     init(agents: AgentRuntime, open: @escaping (UUID) -> Void) {
         model = AgentDockModel(agents: agents, open: open)
-        panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel = DockPanelWindow(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.level = .floating
         panel.isOpaque = false
         panel.backgroundColor = .clear
@@ -32,10 +40,15 @@ final class AgentDockPanel {
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
         panel.contentView = NSHostingView(rootView: AgentDockView(model: model))
 
-        model.$agentCount.combineLatest(model.$expanded)
+        // Typing needs the panel to be key; closing the box gives the keyboard back.
+        model.$expanded
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _, _ in self?.layout() }
+            .sink { [weak self] expanded in
+                guard let self else { return }
+                if expanded != nil { self.panel.makeKeyAndOrderFront(nil) } else if self.panel.isKeyWindow { self.panel.resignKey() }
+            }
             .store(in: &cancellables)
+        model.$agentCount.receive(on: DispatchQueue.main).sink { [weak self] _ in self?.layout() }.store(in: &cancellables)
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.layout() }
         }
@@ -49,22 +62,31 @@ final class AgentDockPanel {
         Log.app.info("dock shown with \(self.model.agentCount) clicky(s)")
     }
 
-    func hide() { panel.orderOut(nil) }
+    func hide() {
+        model.expanded = nil
+        panel.orderOut(nil)
+    }
 
     func setVisible(_ on: Bool) { on ? show() : hide() }
 
-    /// Bottom-right of the main screen's visible area, sized to the row of Clickys.
+    /// Opens the ask box under a Clicky (debug + Home shortcuts).
+    func ask(_ agentID: UUID) {
+        if !panel.isVisible { show() }
+        model.expanded = agentID
+    }
+
+    /// Bottom-right of the main screen's visible area. The frame is fixed for a
+    /// given Clicky count (the ask box and bubbles fit inside it), so nothing
+    /// moves under the pointer when a box opens.
     private func layout() {
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let count = max(1, model.agentCount)
-        let width = CGFloat(count) * AgentDockView.slot + 24 + (model.expanded != nil ? 180 : 0)
-        let height: CGFloat = 150
+        let width = CGFloat(count) * AgentDockView.slot + 2 * AgentDockView.margin
+        let height = AgentDockView.height
         let v = screen.visibleFrame
-        let frame = NSRect(x: v.maxX - width - 12, y: v.minY + 8, width: width, height: height)
-        panel.setFrame(frame, display: true)
+        panel.setFrame(NSRect(x: v.maxX - width - 8, y: v.minY + 6, width: width, height: height), display: true)
     }
 
-    /// Renders the strip to a PNG (debug).
     func snapshot(to url: URL) {
         guard let view = panel.contentView else { return }
         let ok = DebugSnapshot.write(view: view, background: .clear, appearance: NSAppearance(named: .darkAqua), to: url)
@@ -79,7 +101,6 @@ final class AgentDockModel: ObservableObject {
     @Published var draft = ""
     let agents: AgentRuntime
     let open: (UUID) -> Void
-    private var cancellables = Set<AnyCancellable>()
 
     init(agents: AgentRuntime, open: @escaping (UUID) -> Void) {
         self.agents = agents
@@ -88,17 +109,29 @@ final class AgentDockModel: ObservableObject {
         agents.store.$agents.map(\.count).receive(on: DispatchQueue.main).assign(to: &$agentCount)
     }
 
+    func toggle(_ id: UUID) {
+        if expanded == id { expanded = nil; draft = "" } else { expanded = id }
+    }
+
     func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let id = expanded, !text.isEmpty else { return }
         draft = ""
         expanded = nil
-        agents.send(text, to: id)
+        agents.send(text, to: id)      // steers when the Clicky is mid-turn
+        Log.app.info("dock ask sent to \(self.agents.store.agent(id: id)?.slug ?? "?", privacy: .public) (\(text.count) chars)")
+    }
+
+    func cancel() {
+        draft = ""
+        expanded = nil
     }
 }
 
 struct AgentDockView: View {
-    static let slot: CGFloat = 92
+    static let slot: CGFloat = 96
+    static let margin: CGFloat = 120     // room for the ask box / bubble to overhang the slots
+    static let height: CGFloat = 200
     @ObservedObject var model: AgentDockModel
     @ObservedObject private var store: AgentStore
     @ObservedObject private var runtime: AgentRuntime
@@ -117,58 +150,66 @@ struct AgentDockView: View {
                 clicky(agent)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, Self.margin)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         .foregroundStyle(.white)
+        .onExitCommand { model.cancel() }
     }
 
     private func clicky(_ agent: Agent) -> some View {
         let running = runtime.isRunning(agent.id)
         let activity = runtime.activity[agent.id]
         let isExpanded = model.expanded == agent.id
-        return VStack(spacing: 4) {
-            if let activity, !activity.isEmpty {
+        return VStack(spacing: 5) {
+            if isExpanded {
+                HStack(spacing: 6) {
+                    TextField(running ? "Add to what \(agent.name) is doing…" : "Ask \(agent.name)…", text: $model.draft)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                        .focused($askFocused)
+                        .onSubmit { model.send() }
+                    Button { model.send() } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 16)) }
+                        .buttonStyle(.plain)
+                        .disabled(model.draft.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 7)
+                .frame(width: 260)
+                .background(RoundedRectangle(cornerRadius: 11).fill(Color.black.opacity(0.88)))
+                .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color.white.opacity(0.15)))
+                .onAppear { DispatchQueue.main.async { askFocused = true } }
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            } else if let activity, !activity.isEmpty {
                 Text(activity)
                     .font(.system(size: 11))
                     .lineLimit(3)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 10).padding(.vertical, 6)
                     .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.78)))
-                    .frame(maxWidth: 200)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-            if isExpanded {
-                HStack(spacing: 6) {
-                    TextField("Ask \(agent.name)…", text: $model.draft)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12))
-                        .focused($askFocused)
-                        .onSubmit { model.send() }
-                    Button { model.send() } label: { Image(systemName: "arrow.up.circle.fill") }.buttonStyle(.plain)
-                }
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .frame(width: 220)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.85)))
-                .onAppear { askFocused = true }
+                    .frame(maxWidth: 220)
+                    .transition(.opacity)
             }
             Bobbing(active: running) {
-                ClickyCharacterView(character: agent.look, mood: running ? .thinking : (activity == nil ? .awake : .happy), size: 64)
+                ClickyCharacterView(character: agent.look, mood: running ? .thinking : (isExpanded ? .listening : (activity == nil ? .awake : .happy)), size: 64)
             }
+            .scaleEffect(isExpanded ? 1.06 : 1)
             .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
-            .onTapGesture { model.open(agent.id) }
-            .onHover { inside in
-                if inside { model.expanded = agent.id } else if model.draft.isEmpty { model.expanded = nil }
+            .contentShape(Rectangle())
+            .onTapGesture { model.toggle(agent.id) }
+            .help(isExpanded ? "Esc closes" : "Click to ask \(agent.name) something")
+            Button { model.open(agent.id) } label: {
+                HStack(spacing: 4) {
+                    Circle().fill(running ? Color.green : Color.white.opacity(0.35)).frame(width: 6, height: 6)
+                    Text(agent.name).font(.system(size: 11, weight: .semibold))
+                }
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background(Capsule().fill(Color.black.opacity(0.7)))
             }
-            HStack(spacing: 4) {
-                Circle().fill(running ? Color.green : Color.white.opacity(0.35)).frame(width: 6, height: 6)
-                Text(agent.name).font(.system(size: 11, weight: .semibold))
-            }
-            .padding(.horizontal, 8).padding(.vertical, 3)
-            .background(Capsule().fill(Color.black.opacity(0.7)))
+            .buttonStyle(.plain)
+            .help("Open \(agent.name) in Home")
         }
         .frame(width: Self.slot)
-        .animation(.easeInOut(duration: 0.2), value: isExpanded)
-        .animation(.easeInOut(duration: 0.2), value: activity)
+        .animation(.easeInOut(duration: 0.18), value: isExpanded)
+        .animation(.easeInOut(duration: 0.18), value: activity)
     }
 }
 

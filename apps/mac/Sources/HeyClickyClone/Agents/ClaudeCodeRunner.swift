@@ -113,6 +113,13 @@ final class ClaudeCodeRunner {
         Log.agents.info("claude turn started cwd=\(options.cwd.lastPathComponent, privacy: .public) resume=\(options.sessionID ?? "new", privacy: .public)")
     }
 
+    /// Sends another user message while the turn runs; Claude Code folds it into the turn.
+    func steer(_ text: String) {
+        guard process.isRunning else { return }
+        send(["type": "user", "message": ["role": "user", "content": [["type": "text", "text": text]]]])
+        Log.agents.info("steer sent (\(text.count) chars)")
+    }
+
     func interrupt() {
         guard process.isRunning else { return }
         process.interrupt()   // SIGINT; claude ends the turn and emits a result

@@ -1,5 +1,6 @@
 import AppKit
 import ClickyPrivacy
+import UserNotifications
 
 /// Drives agents on Claude Code: one headless `claude` process per turn,
 /// resumed by session id, with every event mirrored into the transcript and HUD.
@@ -10,6 +11,16 @@ final class AgentRuntime: ObservableObject {
     let privacy: PrivacyMonitor
     private let notch: NotchViewModel
     private let model: String?
+    static let modelKey = "ClickyAgentModel"
+    static let soundsKey = "ClickySoundsEnabled"
+    static let notificationsKey = "ClickyNotificationsEnabled"
+    /// Setup → Developer picks the model; empty means Claude Code's default (or the AGENT_MODEL env/plist override).
+    var modelChoice: String? {
+        let chosen = UserDefaults.standard.string(forKey: Self.modelKey) ?? ""
+        return chosen.isEmpty ? model : chosen
+    }
+    static var soundsEnabled: Bool { UserDefaults.standard.object(forKey: soundsKey) as? Bool ?? true }
+    static var notificationsEnabled: Bool { UserDefaults.standard.object(forKey: notificationsKey) as? Bool ?? true }
 
     @Published private(set) var transcripts: [UUID: [TranscriptEntry]] = [:]
     @Published private(set) var modelLabel: String?
@@ -21,6 +32,8 @@ final class AgentRuntime: ObservableObject {
     private var starting: Set<UUID> = []                   // turns gathering their MCP servers
     /// Set by the app: Composio + custom connectors for each turn.
     var integrations: IntegrationsHost?
+    /// Set by the app: true when the Home window is the active window (then no notification is needed).
+    var isHomeInFront: (() -> Bool)?
     private var toolEntries: [String: UUID] = [:]          // tool_use id -> transcript entry
     private var streamingEntry: [UUID: UUID] = [:]         // agent -> streaming assistant entry
     private var routineTurns: [UUID: UUID] = [:]           // agent -> routine driving the current turn
@@ -52,8 +65,17 @@ final class AgentRuntime: ObservableObject {
     // MARK: - Turns
 
     func send(_ text: String, to agentID: UUID, routine: Routine? = nil) {
-        guard let agent = store.agent(id: agentID), !isRunning(agentID) else { return }
+        guard let agent = store.agent(id: agentID) else { return }
+        if isRunning(agentID) {
+            // Mid-turn: steer instead of refusing. Shows in the transcript like any message.
+            guard let runner = runners[agentID] else { return }
+            append(.init(role: .user, text: text), to: agentID)
+            runner.steer(text)
+            setActivity(agentID, "Got it, adding that…")
+            return
+        }
         starting.insert(agentID)
+        Self.play("Pop")
         setActivity(agentID, "Starting…")
         append(.init(role: .user, text: text), to: agentID)
         routineTurns[agentID] = routine?.id
@@ -85,7 +107,7 @@ final class AgentRuntime: ObservableObject {
             cwd: store.folder(for: agent),
             sessionID: agent.sessionID,
             newSessionID: UUID().uuidString.lowercased(),
-            model: model,
+            model: modelChoice,
             appendSystemPrompt: Self.turnPreamble(for: agent, computerUse: computerUseOn, routine: routine, integrations: turn),
             mcpConfigJSON: ComputerUseHost.mcpConfigJSON(servers: servers)
         )
@@ -104,6 +126,53 @@ final class AgentRuntime: ObservableObject {
 
     func stop(_ agentID: UUID) {
         runners[agentID]?.interrupt()
+    }
+
+    /// Esc: interrupt whatever is running. Returns true when something was.
+    @discardableResult
+    func stopAll() -> Bool {
+        guard !runners.isEmpty else { return false }
+        runners.values.forEach { $0.interrupt() }
+        return true
+    }
+
+    /// Archives the conversation and starts the Clicky on a fresh thread.
+    func newThread(_ agentID: UUID) {
+        guard let agent = store.agent(id: agentID), !isRunning(agentID) else { return }
+        _ = store.archiveThread(for: agent, entries: transcript(for: agentID))
+        transcripts[agentID] = []
+    }
+
+    static func play(_ systemSound: String) {
+        guard soundsEnabled else { return }
+        NSSound(named: NSSound.Name(systemSound))?.play()
+    }
+
+    /// A macOS notification when a turn ends while Home is not in front.
+    private func notify(agent: Agent, body: String, isError: Bool) {
+        guard Self.notificationsEnabled else { return }
+        guard !(isHomeInFront?() ?? false) else { return }
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            let post = {
+                let content = UNMutableNotificationContent()
+                content.title = isError ? "\(agent.name) hit a problem" : "\(agent.name) is done"
+                content.body = String(body.prefix(180))
+                content.userInfo = ["agentID": agent.id.uuidString]
+                center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)) { error in
+                    if let error { Log.agents.notice("notification failed: \(error.localizedDescription, privacy: .public)") }
+                    else { Log.agents.info("notification posted for \(agent.slug, privacy: .public)") }
+                }
+            }
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                center.requestAuthorization(options: [.alert, .sound]) { granted, _ in if granted { post() } }
+            case .denied:
+                break
+            default:
+                post()
+            }
+        }
     }
 
     func shutdown() {
@@ -230,6 +299,8 @@ final class AgentRuntime: ObservableObject {
 
         let summary = finalText.isEmpty ? (lastAssistant ?? "Done.") : finalText
         setActivity(agentID, isError ? "Hit a problem; see Home." : String(summary.prefix(140)), clearAfter: 25)
+        Self.play(isError ? "Funk" : "Glass")
+        if routineID == nil || !summary.lowercased().hasPrefix("nothing new") { notify(agent: agent, body: summary, isError: isError) }
         if let routineID {
             onRoutineTurnFinished?(routineID, isError ? finalText : summary, isError)
             let quiet = summary.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("nothing new")

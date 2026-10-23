@@ -41,6 +41,10 @@ struct HomeView: View {
     @ObservedObject private var characters: CharacterStore
     @ObservedObject private var updates: UpdateController
     @State private var newWord = ""
+    @AppStorage(AgentRuntime.modelKey) private var agentModel = ""
+    @AppStorage(AgentRuntime.soundsKey) private var soundsOn = true
+    @AppStorage(AgentRuntime.notificationsKey) private var notificationsOn = true
+    @AppStorage(DictationController.localeKey) private var dictationLocale = ""
     @State private var newConnectorName = ""
     @State private var newConnectorURL = ""
     @State private var newConnectorAuth: CustomConnector.Auth = .oauth
@@ -176,6 +180,34 @@ struct HomeView: View {
                 if !dictionary.words.isEmpty {
                     FlowChips(items: dictionary.words) { word in dictionary.words.removeAll { $0 == word } }
                 }
+                HStack(spacing: 8) {
+                    Text("Language").font(.caption)
+                    Picker("", selection: $dictationLocale) {
+                        Text("System (\(Locale.current.identifier))").tag("")
+                        ForEach(DictationController.availableLocales, id: \.identifier) { loc in
+                            Text(loc.localizedString(forIdentifier: loc.identifier) ?? loc.identifier).tag(loc.identifier)
+                        }
+                    }
+                    .labelsHidden().frame(width: 260)
+                    Text("Used by on-device speech; Deepgram detects language itself.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+
+            section("Developer") {
+                HStack(spacing: 8) {
+                    Text("Agent model").font(.caption)
+                    Picker("", selection: $agentModel) {
+                        Text("Claude Code default").tag("")
+                        ForEach(["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"], id: \.self) { Text($0).tag($0) }
+                    }
+                    .labelsHidden().frame(width: 220)
+                    Text(app.agents.modelLabel.map { "last turn ran on \($0)" } ?? "takes effect on the next turn").font(.caption).foregroundStyle(.secondary)
+                }
+                HStack(spacing: 20) {
+                    Toggle("Sounds when a Clicky starts and finishes", isOn: $soundsOn).font(.caption)
+                    Toggle("Notifications when Home isn't in front", isOn: $notificationsOn).font(.caption)
+                }
+                Text("Backend \(app.config.backendURL.absoluteString) · logs: subsystem com.ashish.heyclickyclone").font(.caption2).foregroundStyle(.tertiary)
             }
 
             section("Routines") {

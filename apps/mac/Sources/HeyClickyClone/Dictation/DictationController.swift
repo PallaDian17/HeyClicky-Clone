@@ -8,6 +8,14 @@ import Speech
 @MainActor
 final class DictationController: ObservableObject {
     enum Phase: Equatable { case idle, listening, cleaning, inserting }
+    static let localeKey = "ClickyDictationLocale"
+    static var availableLocales: [Locale] {
+        SFSpeechRecognizer.supportedLocales().sorted { $0.identifier < $1.identifier }
+    }
+    static var chosenLocale: Locale {
+        let id = UserDefaults.standard.string(forKey: localeKey) ?? ""
+        return id.isEmpty ? .current : Locale(identifier: id)
+    }
 
     @Published private(set) var phase: Phase = .idle
     let dictionary = DictationDictionary()
@@ -102,7 +110,7 @@ final class DictationController: ObservableObject {
         if SFSpeechRecognizer.authorizationStatus() == .notDetermined {
             await withCheckedContinuation { cont in SFSpeechRecognizer.requestAuthorization { _ in cont.resume() } }
         }
-        return AppleSpeechTranscriber()
+        return AppleSpeechTranscriber(locale: Self.chosenLocale)
     }
 
     private func deliver(raw: String) async {

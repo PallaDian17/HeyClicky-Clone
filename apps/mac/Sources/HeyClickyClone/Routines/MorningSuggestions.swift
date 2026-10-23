@@ -4,7 +4,11 @@ import AppKit
 /// and show the cards in the notch. Yes on a repeating card makes a routine;
 /// yes on a one-off sends the task.
 @MainActor
-final class MorningSuggestions {
+final class MorningSuggestions: ObservableObject {
+    struct Answered { var card: SuggestionCardModel; var accepted: Bool }
+    @Published private(set) var isLoading = false
+    @Published private(set) var lastFetched: Date?
+    @Published private(set) var answered: [Answered] = []
     static let shownOnKey = "ClickySuggestionsShownOn"
     static let morningHours = 5..<12
 
@@ -13,7 +17,7 @@ final class MorningSuggestions {
     private let routines: RoutineStore
     private let scheduler: RoutineScheduler
     private let notch: NotchViewModel
-    private var cards: [SuggestionCardModel] = []
+    @Published private(set) var cards: [SuggestionCardModel] = []
 
     init(backend: BackendClient, agents: AgentRuntime, routines: RoutineStore, scheduler: RoutineScheduler, notch: NotchViewModel) {
         self.backend = backend
@@ -47,9 +51,11 @@ final class MorningSuggestions {
         Task { await show(force: false) }
     }
 
-    /// Fetches suggestions and shows them. `force` ignores the once-a-day guard.
-    func show(force: Bool) async {
+    /// Fetches suggestions and shows them in the notch (or only on the page). `force` ignores the once-a-day guard.
+    func show(force: Bool, present presentInNotch: Bool = true) async {
         if !force, UserDefaults.standard.string(forKey: Self.shownOnKey) == Self.todayKey { return }
+        isLoading = true
+        defer { isLoading = false }
         let payload = agents.store.agents.map { agent in
             let recent = agents.transcript(for: agent.id)
                 .filter { $0.role == .user && !$0.text.hasPrefix("[Routine:") }
@@ -67,7 +73,9 @@ final class MorningSuggestions {
                 return SuggestionCardModel(title: card.title, task: card.task, agentSlug: agent.slug, agentName: agent.name, everyMinutes: card.every_minutes)
             }
             Log.agents.info("morning suggestions: \(models.count) card(s)")
-            guard !models.isEmpty else { return }
+            lastFetched = Date()
+            cards = models
+            guard !models.isEmpty, presentInNotch else { return }
             present(models)
         } catch {
             Log.agents.notice("morning suggestions unavailable: \(String(describing: error), privacy: .public)")
@@ -80,8 +88,9 @@ final class MorningSuggestions {
         notch.set(.suggestions(cards))
     }
 
-    private func answer(_ card: SuggestionCardModel, accepted: Bool) {
+    func answer(_ card: SuggestionCardModel, accepted: Bool) {
         cards.removeAll { $0.id == card.id }
+        answered.insert(Answered(card: card, accepted: accepted), at: 0)
         if accepted, let agent = agents.store.agents.first(where: { $0.slug == card.agentSlug }) {
             if let every = card.everyMinutes, every >= 5 {
                 let routine = routines.add(agentID: agent.id, title: card.title, task: card.task, everyMinutes: every, firstRun: Date())

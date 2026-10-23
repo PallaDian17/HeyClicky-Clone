@@ -10,7 +10,9 @@ struct HomeSpaceView: View {
     @StateObject private var newClicky: NewClickyModel
     @State private var selection: Selection = .setup
 
-    enum Selection: Hashable { case agent(UUID), newClicky, setup }
+    enum Selection: Hashable { case agent(UUID), newClicky, setup, skills, suggestions }
+    @State private var renaming: Agent?
+    @State private var renameText = ""
 
     init(app: AppDelegate) {
         self.app = app
@@ -39,6 +41,22 @@ struct HomeSpaceView: View {
         .onReceive(NotificationCenter.default.publisher(for: .homeSpaceSetup)) { _ in
             selection = .setup
         }
+        .onReceive(NotificationCenter.default.publisher(for: .homeSpacePage)) { note in
+            switch note.object as? String {
+            case "skills": selection = .skills
+            case "suggestions": selection = .suggestions
+            default: break
+            }
+        }
+        .sheet(item: $renaming) { agent in
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Rename \(agent.name)").font(.headline)
+                TextField("Name", text: $renameText).textFieldStyle(.roundedBorder).frame(width: 260)
+                    .onSubmit { store.rename(agent, to: renameText); renaming = nil }
+                HStack { Spacer(); Button("Cancel") { renaming = nil }; Button("Rename") { store.rename(agent, to: renameText); renaming = nil }.buttonStyle(.borderedProminent) }
+            }
+            .padding(20)
+        }
     }
 
     // MARK: - Sidebar
@@ -59,6 +77,9 @@ struct HomeSpaceView: View {
                         sidebarRow(agent)
                     }
                     newClickyRow
+                    Divider().padding(.vertical, 6)
+                    pageRow("Suggestions", "sparkles", .suggestions)
+                    pageRow("Skills", "bolt.fill", .skills)
                 }
                 .padding(.horizontal, 8)
             }
@@ -76,6 +97,21 @@ struct HomeSpaceView: View {
             .buttonStyle(.plain)
             .padding(8)
         }
+    }
+
+    private func pageRow(_ title: String, _ symbol: String, _ target: Selection) -> some View {
+        Button { selection = target } label: {
+            HStack(spacing: 10) {
+                Image(systemName: symbol).frame(width: 26).foregroundStyle(.secondary)
+                Text(title).font(.system(size: 13, weight: .medium))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(selection == target ? Color.accentColor.opacity(0.18) : .clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var newClickyRow: some View {
@@ -121,6 +157,10 @@ struct HomeSpaceView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
+            Button("Rename…") { renameText = agent.name; renaming = agent }
+            Button("New conversation") { runtime.newThread(agent.id) }.disabled(running)
+            Button("Ask from the desktop") { app.dock.ask(agent.id) }
+            Divider()
             Button("Show folder in Finder") { NSWorkspace.shared.activateFileViewerSelecting([store.folder(for: agent)]) }
             Button("Delete Clicky", role: .destructive) {
                 runtime.stop(agent.id)
@@ -137,6 +177,10 @@ struct HomeSpaceView: View {
         switch selection {
         case .setup:
             HomeView(app: app)
+        case .skills:
+            SkillsPage(store: store)
+        case .suggestions:
+            SuggestionsPage(suggestions: app.suggestions, store: store)
         case .newClicky:
             NewClickyPage(model: newClicky, store: store) { agent in
                 selection = .agent(agent.id)
@@ -157,6 +201,7 @@ extension Notification.Name {
     static let homeSpaceSelectAgent = Notification.Name("HomeSpaceSelectAgent")
     static let homeSpaceNewClicky = Notification.Name("HomeSpaceNewClicky")
     static let homeSpaceSetup = Notification.Name("HomeSpaceSetup")
+    static let homeSpacePage = Notification.Name("HomeSpacePage")
 }
 
 struct AgentAvatar: View {
@@ -203,6 +248,7 @@ struct AgentTranscriptView: View {
         }
         .onDisappear { outputs.stop() }
         .onChange(of: running) { _, isRunning in if !isRunning { outputs.refresh() } }
+        .onExitCommand { if running { runtime.stop(agent.id) } }
     }
 
     private var header: some View {
@@ -214,7 +260,19 @@ struct AgentTranscriptView: View {
             }
             Spacer()
             if running {
-                Button("Stop") { runtime.stop(agent.id) }
+                Button("Stop") { runtime.stop(agent.id) }.keyboardShortcut(".", modifiers: .command)
+            } else {
+                Menu {
+                    Button("New conversation") { runtime.newThread(agent.id) }
+                    let threads = store.archivedThreads(for: agent)
+                    if !threads.isEmpty {
+                        Divider()
+                        Text("\(threads.count) archived").font(.caption)
+                        Button("Show history folder") { NSWorkspace.shared.activateFileViewerSelecting([threads[0]]) }
+                    }
+                } label: { Image(systemName: "clock.arrow.circlepath") }
+                .menuStyle(.borderlessButton).frame(width: 28)
+                .help("Conversation history")
             }
             if let model = runtime.modelLabel {
                 Text(model).font(.caption2).foregroundStyle(.secondary)
@@ -272,7 +330,7 @@ struct AgentTranscriptView: View {
                 .padding(.horizontal, 12)
             }
             HStack(alignment: .bottom, spacing: 10) {
-                TextField("Ask \(agent.name) to do something… (drop files here)", text: $draft, axis: .vertical)
+                TextField(running ? "Add to what \(agent.name) is doing… (Esc stops)" : "Ask \(agent.name) to do something… (drop files here)", text: $draft, axis: .vertical)
                     .lineLimit(1...6)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
@@ -285,7 +343,7 @@ struct AgentTranscriptView: View {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 26))
                 }
                 .buttonStyle(.plain)
-                .disabled((draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty) || running)
+                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty)
                 .keyboardShortcut(.return, modifiers: .command)
             }
             .padding(12)
@@ -299,7 +357,7 @@ struct AgentTranscriptView: View {
 
     private func send() {
         var text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (!text.isEmpty || !attachments.isEmpty), !running else { return }
+        guard !text.isEmpty || !attachments.isEmpty else { return }
         if !attachments.isEmpty {
             let list = attachments.map { "tmp/attachments/\($0.lastPathComponent)" }.joined(separator: ", ")
             text += (text.isEmpty ? "" : "\n\n") + "Attached files (in this folder): \(list)"

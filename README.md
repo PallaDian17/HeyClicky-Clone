@@ -5,7 +5,15 @@ HUD, push-to-talk screen-aware voice chat that can draw on the screen, named
 agents that run tasks on the Mac through Claude Code and a computer-use
 driver, dictation, and scheduled routines.
 
-Status: **phase 8 + desktop Clickys.** Your Clickys also live on the desktop:
+Status: **feature pass against the original done (2026-10-23).** Every
+observed HeyClicky feature is listed with its Hi Dicky counterpart and how it
+was tested in [`docs/feature-audit.md`](docs/feature-audit.md). New in that
+pass: steer a running Clicky by just sending more, Esc/⌘. interrupt, New
+conversation with archived threads, rename, finish sounds and notifications,
+Skills and Suggestions pages in Home, a model picker and dictation language in
+Setup, and a desktop dock you can click and type into.
+
+Earlier: **phase 8 + desktop Clickys.** Your Clickys also live on the desktop:
 a small strip in the bottom-right corner shows each one, bobbing with its
 current step while it works and holding up its reply when done; click to open
 it, hover to ask it something (Setup → Clickys on the desktop).

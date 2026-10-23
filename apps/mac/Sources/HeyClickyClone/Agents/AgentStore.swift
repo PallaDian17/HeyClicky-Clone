@@ -168,6 +168,57 @@ final class AgentStore: ObservableObject {
         Log.agents.info("installed skill \(name, privacy: .public) for \(agent.slug, privacy: .public)")
     }
 
+    func installedSkills(for agent: Agent) -> Set<String> {
+        let dir = folder(for: agent).appendingPathComponent(".claude/skills", isDirectory: true)
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        return Set(names.filter { $0 != "cua-driver" && !$0.hasPrefix(".") })
+    }
+
+    func uninstallSkill(named name: String, for agent: Agent) {
+        guard name != "cua-driver" else { return }
+        try? FileManager.default.removeItem(at: folder(for: agent).appendingPathComponent(".claude/skills/\(name)", isDirectory: true))
+        Log.agents.info("removed skill \(name, privacy: .public) from \(agent.slug, privacy: .public)")
+    }
+
+    /// Archives the current conversation under history/ and forgets the Claude session,
+    /// so the next message starts a fresh thread with the same persona and notes.
+    func archiveThread(for agent: Agent, entries: [TranscriptEntry]) -> Agent {
+        let dir = folder(for: agent).appendingPathComponent("history", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if !entries.isEmpty, let data = try? Self.encoder.encode(entries) {
+            let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false)).replacingOccurrences(of: ":", with: "-")
+            try? data.write(to: dir.appendingPathComponent("\(stamp).json"), options: .atomic)
+        }
+        var updated = agent
+        updated.sessionID = nil
+        update(updated)
+        saveTranscript([], for: updated)
+        Log.agents.info("archived thread for \(agent.slug, privacy: .public) (\(entries.count) entries)")
+        return updated
+    }
+
+    func archivedThreads(for agent: Agent) -> [URL] {
+        let dir = folder(for: agent).appendingPathComponent("history", isDirectory: true)
+        return ((try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent > $1.lastPathComponent }
+    }
+
+    /// Renames a Clicky: roster entry plus the heading of its persona file.
+    func rename(_ agent: Agent, to newName: String) {
+        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name != agent.name else { return }
+        var updated = agent
+        updated.name = name
+        update(updated)
+        let persona = folder(for: agent).appendingPathComponent("CLAUDE.md")
+        if var text = try? String(contentsOf: persona, encoding: .utf8) {
+            text = text.replacingOccurrences(of: "# \(agent.name)\n", with: "# \(name)\n")
+            text = text.replacingOccurrences(of: "You are \(agent.name),", with: "You are \(name),")
+            try? text.write(to: persona, atomically: true, encoding: .utf8)
+        }
+        Log.agents.info("renamed \(agent.slug, privacy: .public) to \(name, privacy: .public)")
+    }
+
     func installComputerUseSkill(for agent: Agent, from source: URL?) {
         guard let source, FileManager.default.fileExists(atPath: source.appendingPathComponent("SKILL.md").path) else { return }
         let dest = folder(for: agent).appendingPathComponent(".claude/skills/cua-driver", isDirectory: true)
