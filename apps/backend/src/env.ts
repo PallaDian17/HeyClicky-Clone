@@ -31,6 +31,7 @@ export const env = {
   chatModel: process.env.OPENAI_CHAT_MODEL ?? "gpt-5.6-sol",
   realtimeModel: process.env.OPENAI_REALTIME_MODEL ?? "gpt-realtime",
   realtimeVoice: process.env.REALTIME_VOICE ?? "marin",
+  realtimeLanguage: process.env.REALTIME_LANGUAGE ?? "en",
   transcriptionModel: process.env.REALTIME_TRANSCRIPTION_MODEL ?? "gpt-4o-mini-transcribe",
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseJwtSecret: process.env.SUPABASE_JWT_SECRET,

@@ -42,6 +42,14 @@ final class OnboardingModel: ObservableObject {
     static let voices = ["marin", "cedar", "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"]
     static let voiceKey = "ClickyVoice"
     static var selectedVoice: String { UserDefaults.standard.string(forKey: voiceKey) ?? "marin" }
+    static let languageKey = "ClickyTalkLanguage"
+    static let languages: [(code: String, name: String)] = [
+        ("en", "English"), ("es", "Spanish"), ("fr", "French"), ("de", "German"), ("it", "Italian"),
+        ("pt", "Portuguese"), ("hi", "Hindi"), ("ja", "Japanese"), ("ko", "Korean"), ("zh", "Chinese"),
+    ]
+    /// English unless changed in Setup; talk mode speaks and transcribes in this language only.
+    static var selectedLanguage: String { UserDefaults.standard.string(forKey: languageKey) ?? "en" }
+    static func languageName(_ code: String) -> String { languages.first { $0.code == code }?.name ?? "English" }
 
     @Published var step: Step = .welcome
     @Published var character: ClickyCharacter

@@ -21,6 +21,13 @@ final class TalkCoordinator {
     private let privacy: PrivacyMonitor
     private let voice = RealtimeVoiceClient()
     private let audio = VoiceAudioEngine()
+    let region = RegionSelectOverlayManager()
+    /// Circle-to-ask bookkeeping: the action chosen before the key came up, and the words once they arrived.
+    private var pendingRegion: (action: RegionSelectOverlayManager.Action, box: CGRect)?
+    private var pendingTranscript: String?
+    private var awaitingRegionWords = false
+    /// The last circle-to-ask, kept for "Tell me more".
+    private var lastRegionAsk: (question: String, answer: String, appName: String?, crop: Data?)?
 
     private struct Context {
         var shot: ScreenCapture.Shot?
@@ -42,6 +49,15 @@ final class TalkCoordinator {
         self.overlay = overlay
         self.privacy = privacy
         wireVoice()
+        region.onAction = { [weak self] action, box in self?.regionChosen(action, box: box) }
+        notch.onTellMore = { [weak self] in self?.tellMeMore() }
+        region.onDismiss = { [weak self] in
+            guard let self else { return }
+            pendingRegion = nil
+            pendingTranscript = nil
+            awaitingRegionWords = false
+            if phase == .thinking { phase = .idle; notch.collapse() }
+        }
     }
 
     // MARK: - Hotkey entry points
@@ -51,6 +67,10 @@ final class TalkCoordinator {
         phase = .listening
         notch.set(.listening)
         overlay.hide()
+        pendingRegion = nil
+        pendingTranscript = nil
+        awaitingRegionWords = false
+        region.arm(on: NSScreen.main)
         contextTask = Task { await self.captureContext() }
 
         Task { @MainActor in
@@ -74,15 +94,33 @@ final class TalkCoordinator {
         audio.stopCapture()
         phase = .thinking
         notch.set(.thinking)
+        let circling = region.hasSelection || pendingRegion != nil
+        if !circling { region.disarmIfIdle() }
         guard voice.isConnected else {
+            if circling {
+                // No words possible; the region still works on its own.
+                pendingTranscript = ""
+                awaitingRegionWords = false
+                notch.set(.notice("Circle something, then choose Ask, Hand to, or Copy."), autoDismissAfter: 4)
+                if let p = pendingRegion { pendingRegion = nil; regionChosen(p.action, box: p.box) }
+                return
+            }
             phase = .idle
             notch.set(.notice("Voice is not connected. Try again."), autoDismissAfter: 4)
             return
         }
         voice.commitInput()
+        awaitingRegionWords = circling
         turnTask = Task { @MainActor in
             do {
                 let transcript = try await waitForTranscript(timeout: 10)
+                if circling || region.hasSelection {
+                    pendingTranscript = transcript
+                    awaitingRegionWords = false
+                    if let p = pendingRegion { pendingRegion = nil; regionChosen(p.action, box: p.box) }
+                    else { notch.set(.notice(transcript.isEmpty ? "Choose Ask, Hand to, or Copy for what you circled." : "Got it: \"\(transcript.prefix(60))\". Choose Ask, Hand to, or Copy."), autoDismissAfter: 6) }
+                    return
+                }
                 guard !transcript.isEmpty else {
                     phase = .idle
                     notch.set(.notice("Didn't catch that. Hold ⌃⌃ and try again."), autoDismissAfter: 4)
@@ -90,10 +128,103 @@ final class TalkCoordinator {
                 }
                 await runTurn(transcript: transcript)
             } catch {
+                if circling { pendingTranscript = ""; awaitingRegionWords = false; if let p = pendingRegion { pendingRegion = nil; regionChosen(p.action, box: p.box) }; return }
                 phase = .idle
                 notch.set(.notice(Self.friendly(error)), autoDismissAfter: 5)
             }
         }
+    }
+
+    // MARK: - Circle-to-ask
+
+    /// The user picked Ask / Hand to / Copy for a circled region.
+    private func regionChosen(_ action: RegionSelectOverlayManager.Action, box: CGRect) {
+        // Words still on their way (key not yet released, or transcript pending): remember the choice.
+        if phase == .listening || awaitingRegionWords {
+            pendingRegion = (action, box)
+            if phase == .listening { notch.set(.notice("Let go of the key when you're done talking."), autoDismissAfter: 3) }
+            return
+        }
+        let words = (pendingTranscript ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        pendingTranscript = nil
+        switch action {
+        case .ask:
+            phase = .thinking
+            notch.set(.thinking)
+            if contextTask == nil { contextTask = Task { await self.captureContext() } }
+            turnTask = Task { @MainActor in await runTurn(transcript: words.isEmpty ? "What is this?" : words, region: box) }
+        case .handoff(let agentID):
+            phase = .thinking
+            notch.set(.thinking)
+            turnTask = Task { @MainActor in await handoffRegion(box: box, words: words, agentID: agentID) }
+        case .copy:
+            Task { @MainActor in await copyRegion(box: box) }
+        }
+    }
+
+    private func handoffRegion(box: CGRect, words: String, agentID: UUID?) async {
+        let context = await contextTask?.value ?? Context(shot: nil, harvest: .empty, withheld: nil)
+        if let reason = context.withheld {
+            phase = .idle
+            notch.set(.notice("Not looking: \(reason.label)"), autoDismissAfter: 3)
+            return
+        }
+        let crop = context.shot?.crop(normalized: box)?.data
+        let what = words.isEmpty ? "Tell me what this is and whether anything about it needs doing." : words
+        let task = "The user circled a region of their screen\(context.harvest.appName.map { " in \($0)" } ?? ""); the attached image is that region. \(what)"
+        let hint = agentID.flatMap { id in region.agentsProvider().first(where: { $0.id == id })?.name }
+        if let name = onHandoff?(task, hint, crop) {
+            notch.set(.reply("Handing that to \(name)."), autoDismissAfter: 5)
+            if voice.isUsable { phase = .speaking; voice.speak("Handing that to \(name).") } else { phase = .idle }
+            Log.app.info("region handoff to \(name, privacy: .public) crop=\(crop?.count ?? 0) bytes")
+        } else {
+            phase = .idle
+            notch.set(.notice("No Clicky took that."), autoDismissAfter: 4)
+        }
+    }
+
+    private func copyRegion(box: CGRect) async {
+        let context = await contextTask?.value ?? Context(shot: nil, harvest: .empty, withheld: nil)
+        phase = .idle
+        if let reason = context.withheld {
+            notch.set(.notice("Not copying: \(reason.label)"), autoDismissAfter: 3)
+            return
+        }
+        guard let png = context.shot?.cropPNG(normalized: box) else {
+            notch.set(.notice("Couldn't copy that region."), autoDismissAfter: 3)
+            return
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setData(png, forType: .png)
+        notch.set(.notice("Copied the circled region."), autoDismissAfter: 3)
+        Log.app.info("region copied \(png.count) bytes")
+    }
+
+    /// "Tell me more" on a circle-to-ask reply: the crop, the question and Clicky's answer go to Scout
+    /// (or the first Clicky) for a researched walkthrough in Home.
+    func tellMeMore() {
+        guard let last = lastRegionAsk else { return }
+        notch.tellMoreAvailable = false
+        let question = last.question == "What is this?" ? "What is this, what does it do here, and how do I use it?" : last.question
+        let task = """
+        The user circled part of their screen\(last.appName.map { " in \($0)" } ?? "") and asked: "\(question)". The attached image is exactly what they circled. Clicky's quick spoken answer was: "\(last.answer)".
+        Go deeper. Explain what it is, what it does in this app, and how to use it step by step, with anything to watch out for and what happens afterwards. If the app or feature is public, check its documentation on the web and cite it. Write the walkthrough to output/ as Markdown and reply with the three sentences that matter most.
+        """
+        if let name = onHandoff?(task, "Scout", last.crop) {
+            notch.set(.reply("Handing that to \(name) for the full story."), autoDismissAfter: 5)
+            if voice.isUsable { phase = .speaking; voice.speak("Handing that to \(name) for the full story.") } else { phase = .idle }
+            Log.app.info("tell-me-more handed to \(name, privacy: .public) crop=\(last.crop?.count ?? 0) bytes")
+        } else {
+            notch.set(.notice("No Clicky took that."), autoDismissAfter: 4)
+        }
+    }
+
+    /// Debug: run a region action for a given normalized box without the overlay.
+    func debugRegion(box: CGRect, text: String?, action: RegionSelectOverlayManager.Action) {
+        if phase != .idle { cancel() }
+        contextTask = Task { await self.captureContext() }
+        pendingTranscript = text ?? ""
+        regionChosen(action, box: box)
     }
 
     /// Typed question from the HUD prompt box or the debug URL.
@@ -114,12 +245,16 @@ final class TalkCoordinator {
         audio.stopPlayback()
         if voice.isConnected { voice.cancelResponse() }
         overlay.hide()
+        region.dismiss(notify: false)
+        pendingRegion = nil
+        pendingTranscript = nil
+        awaitingRegionWords = false
         phase = .idle
     }
 
     // MARK: - The turn
 
-    private func runTurn(transcript rawTranscript: String) async {
+    private func runTurn(transcript rawTranscript: String, region box: CGRect? = nil) async {
         // Spoken or typed text may contain a code the user just read out; never forward it.
         let redaction = PrivacyGuard.redact(rawTranscript)
         let transcript = redaction.text
@@ -132,13 +267,17 @@ final class TalkCoordinator {
             try? await Task.sleep(for: .seconds(1.2))
         }
         notch.set(.thinking)
+        let crop = box.flatMap { context.withheld == nil ? context.shot?.crop(normalized: $0) : nil }
+        if let box { Log.app.info("region ask box=\(NSStringFromRect(box), privacy: .public) crop=\(crop?.data.count ?? 0) bytes") }
         let request = BackendClient.ChatRequest(
             transcript: transcript,
             screenshot: context.shot?.jpegBase64,
             appName: context.harvest.appName,
             elements: context.harvest.elements,
             history: Array(history.suffix(8)),
-            screenWithheld: context.withheld?.label
+            screenWithheld: context.withheld?.label,
+            region: box.map { .init(x: $0.minX, y: $0.minY, w: $0.width, h: $0.height) },
+            regionCrop: crop?.jpegBase64
         )
         do {
             let reply = try await backend.chat(request)
@@ -158,7 +297,14 @@ final class TalkCoordinator {
                 }
             }
 
-            notch.set(.reply(replyText), autoDismissAfter: 12)
+            if let box, context.withheld == nil {
+                lastRegionAsk = (transcript, replyText, context.harvest.appName, crop?.data)
+                notch.tellMoreAvailable = true
+            } else {
+                lastRegionAsk = nil
+                notch.tellMoreAvailable = false
+            }
+            notch.set(.reply(replyText), autoDismissAfter: box == nil ? 12 : 20)
             if context.withheld == nil { point(reply, context: context) }
 
             if voice.isUsable {
@@ -226,7 +372,8 @@ final class TalkCoordinator {
 
     private func ensureVoice() async throws {
         if voice.isUsable { return }
-        let grant = try await backend.mintRealtimeSession(voice: OnboardingModel.selectedVoice)
+        let grant = try await backend.mintRealtimeSession(voice: OnboardingModel.selectedVoice, language: OnboardingModel.selectedLanguage)
+        voice.language = OnboardingModel.languageName(OnboardingModel.selectedLanguage)
         try await voice.connect(grant: grant)
     }
 

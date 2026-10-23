@@ -45,6 +45,7 @@ struct HomeView: View {
     @AppStorage(AgentRuntime.soundsKey) private var soundsOn = true
     @AppStorage(AgentRuntime.notificationsKey) private var notificationsOn = true
     @AppStorage(DictationController.localeKey) private var dictationLocale = ""
+    @AppStorage(OnboardingModel.languageKey) private var talkLanguage = "en"
     @State private var newConnectorName = ""
     @State private var newConnectorURL = ""
     @State private var newConnectorAuth: CustomConnector.Auth = .oauth
@@ -109,6 +110,17 @@ struct HomeView: View {
                           systemImage: permissions.allGranted ? "checkmark.shield.fill" : "shield")
                     Spacer()
                     Button("Manage…") { app.showPermissions() }
+                }
+            }
+
+            section("Talk") {
+                HStack(spacing: 8) {
+                    Text("Language").font(.caption)
+                    Picker("", selection: $talkLanguage) {
+                        ForEach(OnboardingModel.languages, id: \.code) { Text($0.name).tag($0.code) }
+                    }
+                    .labelsHidden().frame(width: 160)
+                    Text("Clicky speaks and transcribes in this language only (English by default). Takes effect on the next talk.").font(.caption).foregroundStyle(.secondary)
                 }
             }
 

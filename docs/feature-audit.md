@@ -37,6 +37,7 @@ Legend: ✅ matches · 🟡 partial · ❌ not built · ⛔ excluded by decision
 | Reads the whole document under view | Accessibility harvest of the frontmost window (elements, URLs, secure fields) | 🟡 | `privacy/status` shows element counts |
 | Realtime voice answer | OpenAI Realtime (`gpt-realtime`), voice chosen in onboarding/Setup | ✅ | `talk/hold`: session minted, connected, mic capture at 48 kHz; 4 s of silence produced an empty transcript (expected) |
 | Blue cursor / sketch stroke pointing, `[TARGET]` | Pointing overlay from `element_id` / `box` in the chat reply | ✅ | phase 2 |
+| Region select during talk (drag a region, post-drag action bar, hand-off or copy) | Circle-to-ask: stroke overlay, Ask / Hand to / Copy bar, region + crop sent to the model; Ask explains what/does/how; Tell me more hands it to Scout | ✅ | synthetic circle drag during a real hold → Ask → reply + pointer; copy → PNG; hand-off → Scout |
 | Click-to-advance turns | Not built | ❌ | — |
 | Response card with photo gallery, Place/Stock widgets, image + web search | Not built (needs `/places`, `/web-search`, image search backends) | ❌ | — |
 | Privacy of secrets on screen | Privacy guard: withholds the screen on password fields, protected apps, payment/sign-in/OTP pages; redacts codes and cards | ✅ (beyond original) | `privacy-checks` 21/21; live withheld case in phase 4b |
@@ -118,7 +119,7 @@ Legend: ✅ matches · 🟡 partial · ❌ not built · ⛔ excluded by decision
 ## Still open (ranked by value)
 
 1. Talk reply cards: places, images, stock quotes, web search (needs new backend routes).
-2. Click-to-advance guided turns.
+2. Click-to-advance guided turns (circle-to-ask is done).
 3. Thread list per Clicky in the UI (archives exist on disk), move thread between Clickys.
 4. Diff and table blocks in the transcript.
 5. Launch at login; hotkey recorder; meeting bar.

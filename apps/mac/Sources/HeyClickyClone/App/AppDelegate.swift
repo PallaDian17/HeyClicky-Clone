@@ -64,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         scheduler.start()
         suggestions.start()
         agents.integrations = integrations
+        talk.region.agentsProvider = { [weak self] in (self?.agents.store.agents ?? []).map { (id: $0.id, name: $0.name) } }
         agents.isHomeInFront = { [weak self] in
             guard let self, NSApp.isActive, let home = self.homeWindow?.window else { return false }
             return home.isKeyWindow
@@ -327,7 +328,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "talk":
             // `talk?text=…` runs a typed turn; `talk/hold?seconds=3` presses and releases the talk gesture.
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
-            if url.lastPathComponent == "hold" {
+            if url.lastPathComponent == "region" {
+                // `talk/region?x=0.2&y=0.1&w=0.3&h=0.2[&text=…][&action=ask|copy|handoff][&slug=scout]` runs circle-to-ask without the overlay.
+                func f(_ n: String, _ d: Double) -> Double { Double(items.first(where: { $0.name == n })?.value ?? "") ?? d }
+                let box = CGRect(x: f("x", 0.3), y: f("y", 0.3), width: f("w", 0.3), height: f("h", 0.2))
+                let slug = items.first(where: { $0.name == "slug" })?.value
+                let action: RegionSelectOverlayManager.Action
+                switch items.first(where: { $0.name == "action" })?.value {
+                case "copy": action = .copy
+                case "handoff": action = .handoff(agents.store.agents.first(where: { $0.slug == slug })?.id)
+                default: action = .ask
+                }
+                talk.debugRegion(box: box, text: items.first(where: { $0.name == "text" })?.value, action: action)
+            } else if url.lastPathComponent == "more" {
+                // `talk/more` = the "Tell me more" button on the last circle-to-ask reply.
+                talk.tellMeMore()
+            } else if url.lastPathComponent == "arm" {
+                // `talk/arm` shows the region overlay without voice (drag, then use the bar).
+                talk.region.arm(on: NSScreen.main)
+            } else if url.lastPathComponent == "bar" {
+                Log.hud.info("region bar frame=\(self.talk.region.actionBarQuartzFrame.map(NSStringFromRect) ?? "hidden", privacy: .public)")
+            } else if url.lastPathComponent == "hold" {
                 let seconds = Double(items.first(where: { $0.name == "seconds" })?.value ?? "") ?? 3
                 talk.beginHold()
                 DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in self?.talk.endHold() }

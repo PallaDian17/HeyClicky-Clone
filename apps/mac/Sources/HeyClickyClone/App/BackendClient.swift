@@ -11,7 +11,11 @@ final class BackendClient {
         var history: [HistoryTurn]
         /// Set when the privacy guard withheld the screen; the backend tells the model why.
         var screenWithheld: String?
+        /// Circle-to-ask: the circled part of the screenshot (0..1, top-left origin) and its enlarged crop.
+        var region: RegionBox?
+        var regionCrop: String?
     }
+    struct RegionBox: Encodable { var x: Double; var y: Double; var w: Double; var h: Double }
     struct HistoryTurn: Codable { var role: String; var text: String }
     struct Box: Decodable { var x: Double; var y: Double; var w: Double; var h: Double }
     struct Handoff: Decodable { var task: String; var agent_hint: String? }
@@ -53,10 +57,10 @@ final class BackendClient {
         try await post("v1/chat", body: request)
     }
 
-    private struct VoiceBody: Encodable { var voice: String }
+    private struct VoiceBody: Encodable { var voice: String; var language: String }
 
-    func mintRealtimeSession(voice: String) async throws -> RealtimeGrant {
-        try await post("v1/realtime/session", body: VoiceBody(voice: voice))
+    func mintRealtimeSession(voice: String, language: String) async throws -> RealtimeGrant {
+        try await post("v1/realtime/session", body: VoiceBody(voice: voice, language: language))
     }
 
     private struct PreviewBody: Encodable { var voice: String }

@@ -94,6 +94,16 @@ struct NotchRootView: View {
                     ClickyCharacterView(character: model.character, mood: .happy, size: 22)
                     Text("Clicky").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
                     Spacer()
+                    if model.tellMoreAvailable {
+                        Button { model.onTellMore?() } label: {
+                            Label("Tell me more", systemImage: "person.fill.badge.plus")
+                                .font(.system(size: 10, weight: .semibold))
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(Capsule().fill(.white.opacity(0.16)))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Hand this to Scout for a deeper walkthrough")
+                    }
                     Text("esc").font(.system(size: 10, weight: .medium, design: .rounded))
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(RoundedRectangle(cornerRadius: 5).fill(.white.opacity(0.12)))

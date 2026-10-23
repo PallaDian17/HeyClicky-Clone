@@ -24,6 +24,9 @@ export const ChatRequest = z.object({
     .default([]),
   /** Present when the app's privacy guard withheld the screen (password field, protected app/page). */
   screenWithheld: z.string().max(200).optional(),
+  /** Circle-to-ask: the part of the screenshot the user circled (0..1, top-left origin) and that part enlarged. */
+  region: z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().min(0).max(1), h: z.number().min(0).max(1) }).optional(),
+  regionCrop: z.string().max(4_000_000).optional(),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
 
@@ -83,6 +86,14 @@ export function buildMessages(req: ChatRequest): ChatMessage[] {
     parts.push({ type: "text", text: "(No screenshot is available for this turn.)" });
   }
   parts.push({ type: "text", text: describeElements(req) });
+  if (req.region && !req.screenWithheld) {
+    const r = req.region;
+    parts.push({
+      type: "text",
+      text: `The user circled part of the screen: the box at x=${r.x.toFixed(3)} y=${r.y.toFixed(3)} w=${r.w.toFixed(3)} h=${r.h.toFixed(3)} of the screenshot (0..1, top-left origin). Answer about what is inside that box unless they clearly ask about something else. Any box you return must still be in full-screenshot coordinates.`,
+    });
+    if (req.regionCrop) parts.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${req.regionCrop}`, detail: "high" } });
+  }
   parts.push({ type: "text", text: `The user said: "${req.transcript}"` });
   messages.push({ role: "user", content: parts });
   return messages;
@@ -101,7 +112,7 @@ chatRoute.post("/", async (c) => {
     const element_id = value.element_id !== null && valid.has(value.element_id) ? value.element_id : null;
     const box = value.box && [value.box.x, value.box.y, value.box.w, value.box.h].every((n) => n >= 0 && n <= 1) ? value.box : null;
     const handoff = value.handoff && value.handoff.task.trim() ? value.handoff : null;
-    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} target=${element_id ?? (box ? "box" : "none")} handoff=${handoff ? "yes" : "no"}`);
+    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} region=${req.region ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} target=${element_id ?? (box ? "box" : "none")} handoff=${handoff ? "yes" : "no"}`);
     return c.json({ text: value.text, element_id, box, handoff, usage });
   } catch (err) {
     const status = err instanceof OpenAIError ? 502 : 500;

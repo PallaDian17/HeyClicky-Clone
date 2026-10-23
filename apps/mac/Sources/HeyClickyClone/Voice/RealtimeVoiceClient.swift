@@ -102,13 +102,16 @@ final class RealtimeVoiceClient: NSObject {
     }
 
     /// Reads `text` aloud, out of band so it never answers the conversation itself.
+    /// Spoken language for every response; the session is minted with the same language.
+    var language = "English"
+
     func speak(_ text: String) {
         send([
             "type": "response.create",
             "response": [
                 "conversation": "none",
                 "output_modalities": ["audio"],
-                "instructions": "Read the following aloud exactly as written, nothing more:\n\n\(text)",
+                "instructions": "Speak in \(language) only; do not translate or switch languages. Read the following aloud exactly as written, nothing more:\n\n\(text)",
             ],
         ])
     }

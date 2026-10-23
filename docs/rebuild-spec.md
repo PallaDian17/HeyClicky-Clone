@@ -130,6 +130,41 @@ Design choices that differ from or simplify the original:
   "hand this to an agent"; the capture + instruction becomes the first turn of a
   new or existing agent.
 
+### 3.2a Talk language — fixed 2026-10-23
+A reply was once read aloud in Spanish: nothing pinned the language, so the
+Realtime model guessed from the room audio. Now English is pinned in three
+places that must agree: the session instructions ("always speak English,
+never translate or switch"), the input transcription `language` hint, and
+every `response.create` ("Speak in English only"). Setup → Talk → Language
+(`ClickyTalkLanguage`, default `en`) changes all three on the next talk;
+the backend default is `REALTIME_LANGUAGE`.
+
+### 3.2b Circle-to-ask — built 2026-10-23
+`Talk/RegionSelectOverlay.swift`. While the talk key is held a transparent
+full-screen panel takes the mouse: drag or circle something and the stroke
+is drawn (purple, glowing); on release the bounding box becomes the
+selection (dimmed outside, dashed box) and a bar appears beside it: **Ask**,
+**Hand to ▾** (one entry per Clicky), **Copy**, ✕. Releasing the key with no
+stroke just removes the overlay. Words and choice can arrive in either order:
+the choice waits for the transcript, the transcript waits for the choice;
+no words → "What is this?".
+- Ask → `/v1/chat` with `region` (0..1 box of the screenshot) + `regionCrop`
+  (the box re-encoded at high detail); the prompt tells the model to answer
+  about the box and to keep any returned box in full-screenshot coordinates,
+  so the pointing overlay still lands. Verified: synthetic loop drag during a
+  real hold → bar → click Ask → key up with silence → reply "This is the top
+  navigation bar…" and a pointer over the circled area.
+- Hand to → the crop lands in the Clicky's tmp/handoffs and the turn starts
+  (Scout read a crop and described it). Copy → PNG on the clipboard.
+- Ask explains a circled control the way a colleague would (what it is, what
+  it does in this app, how to use it, what to watch for; up to four spoken
+  sentences, nothing the screen does not show). The reply card then offers
+  **Tell me more**, which hands the same crop, the question and Clicky's
+  answer to Scout for a researched, written walkthrough in output/.
+- Privacy guard applies: a withheld screen refuses all three.
+- Debug: `talk/region?x&y&w&h[&text][&action=ask|copy|handoff][&slug]`,
+  `talk/arm`, `talk/bar` (logs the bar's frame), `talk/more`.
+
 ### 3.3 Agents
 - Each agent ("helper") is a folder under `~/Library/Application Support/<app>/agents/<slug>/`
   with `AGENTS.md` (persona + dated notes), `output/`, `tmp/`. Codex runs with

@@ -32,6 +32,9 @@ final class NotchViewModel: ObservableObject {
     let geometry: NotchGeometry
     var onPromptSubmitted: ((String) -> Void)?
     @Published var character: ClickyCharacter = ClickyCharacter.loadUser()
+    /// Shown on the reply card after a circle-to-ask: hands the same crop + question + answer to a Clicky.
+    @Published var tellMoreAvailable = false
+    var onTellMore: (() -> Void)?
 
     private var dismissTask: Task<Void, Never>?
     private var hoverTask: Task<Void, Never>?
