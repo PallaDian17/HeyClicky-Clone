@@ -48,6 +48,8 @@ final class TalkCoordinator {
     var transcriptHook: ((String) -> Bool)?
     /// Memory of the user, injected into the chat and the voice session.
     var memory: (() -> String?)?
+    /// The text field that had focus when the gesture began (screen-aware dictation types into it).
+    private var focusedField: FocusedField?
     /// A finished talk exchange, for learning.
     var onExchange: ((_ user: String, _ assistant: String) -> Void)?
 
@@ -76,6 +78,7 @@ final class TalkCoordinator {
         dismissTask?.cancel()
         phase = .listening
         thread.status = "Listening…"
+        focusedField = FocusedField.current()
         notch.set(.listening)
         pendingRegionBox = nil
         region.arm(on: NSScreen.main)
@@ -260,6 +263,10 @@ final class TalkCoordinator {
                 onWalkthrough(goal)
                 return
             }
+            if let draft = reply.insert?.text, !draft.isEmpty {
+                await insertDraft(draft, confirmation: replyText, context: context)
+                return
+            }
             thread.messages.append(.init(role: .assistant, text: replyText))
             thread.chips = reply.follow_ups ?? []
             if let box, context.withheld == nil {
@@ -293,6 +300,54 @@ final class TalkCoordinator {
             phase = .idle
             thread.status = nil
             notch.set(.notice(Self.friendly(error)), autoDismissAfter: 6)
+        }
+    }
+
+    // MARK: - Screen-aware dictation ("type a reply to this in the box here")
+
+    private func insertDraft(_ rawDraft: String, confirmation: String, context: Context) async {
+        let draft = PrivacyGuard.redact(rawDraft).text
+        var field = focusedField ?? FocusedField.current()
+        if field.element == nil { field = FocusedField.current() }
+        let own = field.bundleID == Bundle.main.bundleIdentifier
+        func copyInstead(_ why: String) {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(draft, forType: .string)
+            thread.messages.append(.init(role: .assistant, text: draft))
+            thread.note = "\(why) — copied to the clipboard, paste it where you want it"
+            thread.chips = []
+            thread.status = nil
+            showThread(dismissAfter: 30)
+            phase = .idle
+        }
+        if field.isSecure || PrivacyMonitor.secureInputActive {
+            notch.set(.notice("Not typing into a password field"), autoDismissAfter: 3)
+            phase = .idle
+            return
+        }
+        if case .withhold(let reason) = privacy.guardian.assess(.init(bundleID: field.bundleID, appName: field.appName, windowTitle: field.title)) {
+            copyInstead("Not typing here: \(reason.label)")
+            return
+        }
+        if own || field.element == nil {
+            copyInstead("No text field had focus")
+            return
+        }
+        thread.status = "Typing…"
+        showThread()
+        let outcome = await TextInsertion.insert(draft, into: field)
+        let words = draft.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+        switch outcome {
+        case .pasted, .setDirectly, .unverified:
+            Log.app.info("screen-aware dictation: inserted \(draft.count) chars into \(field.appName ?? "?", privacy: .public) (\(String(describing: outcome), privacy: .public))")
+            thread.messages.append(.init(role: .assistant, text: confirmation))
+            thread.note = "Typed \(words) words into \(field.appName ?? "the field")"
+            thread.chips = []
+            thread.status = voice.isUsable ? "Speaking…" : nil
+            showThread(dismissAfter: voice.isUsable ? nil : 20)
+            if voice.isUsable { phase = .speaking; voice.speak(confirmation) } else { phase = .idle }
+        case .failed(let why):
+            copyInstead("Couldn't type into \(field.appName ?? "the field") (\(why))")
         }
     }
 

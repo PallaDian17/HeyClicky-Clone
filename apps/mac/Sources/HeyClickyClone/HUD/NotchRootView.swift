@@ -45,7 +45,7 @@ struct NotchRootView: View {
             if model.hovering {
                 HStack(spacing: 10) {
                     ClickyCharacterView(character: model.character, mood: .awake, size: 26)
-                    Text("hold ⌃⌥ to talk · double-tap ⌃ to ask · click to open")
+                    Text("hold \(HotkeyMonitor.talkShortLabel) to talk · double-tap \(HotkeyMonitor.shortLabel(HotkeyMonitor.savedPromptModifier)) to ask · click to open")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(0.75))
                 }
@@ -197,7 +197,7 @@ struct NotchRootView: View {
                     .buttonStyle(.plain)
                 }
                 if !w.done {
-                    Text("Hold ⌃⌥ and say \"continue\" or ask a question · Esc stops").font(.system(size: 10)).foregroundStyle(.white.opacity(0.4))
+                    Text("Hold \(HotkeyMonitor.talkShortLabel) and say \"continue\" or ask a question · Esc stops").font(.system(size: 10)).foregroundStyle(.white.opacity(0.4))
                 }
             }
             .padding(.top, 4)

@@ -209,7 +209,7 @@ struct ClickyChatView: View {
                             Text(talking.text.isEmpty ? "Speaking…" : talking.text).lineLimit(1).truncationMode(.head)
                             Text("· Release to send").foregroundStyle(.white.opacity(0.8))
                         } else {
-                            Text("Hold ⌃ Control + ⌥ Option to talk to \(agent.name)")
+                            Text("Hold \(HotkeyMonitor.talkLabel) to talk to \(agent.name)")
                         }
                     }
                     .font(.system(size: 12, weight: .semibold))

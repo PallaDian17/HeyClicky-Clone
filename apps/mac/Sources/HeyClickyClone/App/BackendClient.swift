@@ -37,8 +37,10 @@ final class BackendClient {
         var follow_ups: [String]?
         var clarify: Bool?
         var walkthrough: WalkthroughGoal?
+        var insert: InsertText?
     }
     struct WalkthroughGoal: Decodable { var goal: String }
+    struct InsertText: Decodable { var text: String }
 
     struct WalkthroughLogEntry: Encodable { var instruction: String; var outcome: String }
     struct WalkthroughStepRequest: Encodable {

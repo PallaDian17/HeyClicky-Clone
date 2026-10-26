@@ -45,6 +45,7 @@ struct HomeView: View {
     @State private var memoryProfileDraft = ""
     @State private var memoryVolatileDraft = ""
     @State private var memoryEditing = false
+    @State private var shortcutTick = 0
     @State private var newWord = ""
     @AppStorage(AgentRuntime.modelKey) private var agentModel = ""
     @AppStorage(AgentRuntime.soundsKey) private var soundsOn = true
@@ -164,18 +165,34 @@ struct HomeView: View {
             }
 
             section("Hotkey") {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Hold ⌃ Control + ⌥ Option to talk (lasso anything while holding). Double-tap ⌃ Control for the prompt box. Hold ⌥ Option alone to dictate.")
-                        Spacer()
-                        let ready = app.hotkey.isRunning && permissions.status(.accessibility) == .granted
-                        Circle()
-                            .fill(ready ? Color.green : Color.orange)
-                            .frame(width: 8, height: 8)
-                        Text(ready ? "hotkey ready" : "needs Accessibility")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                HStack {
+                    Text("Modifier keys only. Record, press the combination, let go.").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    let ready = app.hotkey.isRunning && permissions.status(.accessibility) == .granted && permissions.status(.inputMonitoring) == .granted
+                    Circle().fill(ready ? Color.green : Color.orange).frame(width: 8, height: 8)
+                    Text(ready ? "hotkey ready" : "needs Accessibility + Input Monitoring").font(.caption).foregroundStyle(.secondary)
                 }
+                ShortcutRecorderRow(title: "Talk", detail: "Hold to talk; lasso anything while holding. Same keys talk straight into an open Clicky.", flags: HotkeyMonitor.savedTalkChord) { f in
+                    HotkeyMonitor.save(f, for: HotkeyMonitor.talkChordKey); app.hotkey.applySaved(); shortcutTick += 1
+                }
+                ShortcutRecorderRow(title: "Text box", detail: "Double-tap to type a question.", flags: HotkeyMonitor.savedPromptModifier) { f in
+                    HotkeyMonitor.save(f, for: HotkeyMonitor.promptModifierKey); app.hotkey.applySaved(); shortcutTick += 1
+                }
+                ShortcutRecorderRow(title: "Dictation", detail: "Hold to dictate into the focused field; double-tap for hands-free, double-tap again to stop.", flags: HotkeyMonitor.savedDictationModifier) { f in
+                    HotkeyMonitor.save(f, for: HotkeyMonitor.dictationModifierKey); app.hotkey.applySaved(); shortcutTick += 1
+                }
+                if HotkeyMonitor.savedTalkChord == HotkeyMonitor.savedDictationModifier || HotkeyMonitor.savedTalkChord == HotkeyMonitor.savedPromptModifier {
+                    Text("Talk uses the same keys as another gesture; the talk hold wins and the other one can't fire.").font(.caption).foregroundStyle(.orange)
+                }
+                HStack {
+                    Spacer()
+                    Button("Reset to defaults") {
+                        for k in [HotkeyMonitor.talkChordKey, HotkeyMonitor.promptModifierKey, HotkeyMonitor.dictationModifierKey] { UserDefaults.standard.removeObject(forKey: k) }
+                        app.hotkey.applySaved(); shortcutTick += 1
+                    }
+                    .controlSize(.small)
+                }
+                .id(shortcutTick)
             }
 
             section("Character") {

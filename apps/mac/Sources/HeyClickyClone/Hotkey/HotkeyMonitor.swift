@@ -11,7 +11,63 @@ import CoreGraphics
 /// Requires Accessibility (or Input Monitoring) permission; `start()` throws
 /// until it is granted. Callbacks arrive on the main thread.
 final class HotkeyMonitor {
-    enum Event { case doubleTap, holdBegan, holdEnded, escape, dictationBegan, dictationEnded }
+    enum Event { case doubleTap, holdBegan, holdEnded, escape, dictationBegan, dictationEnded, dictationToggle }
+
+    // MARK: - Saved shortcuts (Setup → Hotkey records them)
+
+    static let talkChordKey = "ClickyShortcutTalk"
+    static let promptModifierKey = "ClickyShortcutPrompt"
+    static let dictationModifierKey = "ClickyShortcutDictation"
+    static let defaultTalkChord: CGEventFlags = [.maskControl, .maskAlternate]
+    static let defaultPromptModifier: CGEventFlags = .maskControl
+    static let defaultDictationModifier: CGEventFlags = .maskAlternate
+    /// Only these bits count as a shortcut (device-specific left/right bits are ignored).
+    static let shortcutMask: CGEventFlags = [.maskControl, .maskAlternate, .maskShift, .maskCommand, .maskSecondaryFn]
+
+    static func saved(_ key: String, default value: CGEventFlags) -> CGEventFlags {
+        guard let raw = UserDefaults.standard.object(forKey: key) as? UInt64 else { return value }
+        let flags = CGEventFlags(rawValue: raw).intersection(shortcutMask)
+        return flags.isEmpty ? value : flags
+    }
+    static func save(_ flags: CGEventFlags, for key: String) {
+        UserDefaults.standard.set(flags.intersection(shortcutMask).rawValue, forKey: key)
+    }
+    static var savedTalkChord: CGEventFlags { saved(talkChordKey, default: defaultTalkChord) }
+    static var savedPromptModifier: CGEventFlags { saved(promptModifierKey, default: defaultPromptModifier) }
+    static var savedDictationModifier: CGEventFlags { saved(dictationModifierKey, default: defaultDictationModifier) }
+
+    /// "⌃ Control + ⌥ Option"
+    static func label(_ flags: CGEventFlags) -> String {
+        var parts: [String] = []
+        if flags.contains(.maskControl) { parts.append("⌃ Control") }
+        if flags.contains(.maskAlternate) { parts.append("⌥ Option") }
+        if flags.contains(.maskShift) { parts.append("⇧ Shift") }
+        if flags.contains(.maskCommand) { parts.append("⌘ Command") }
+        if flags.contains(.maskSecondaryFn) { parts.append("fn") }
+        return parts.isEmpty ? "—" : parts.joined(separator: " + ")
+    }
+    /// "⌃⌥"
+    static func shortLabel(_ flags: CGEventFlags) -> String {
+        var s = ""
+        if flags.contains(.maskControl) { s += "⌃" }
+        if flags.contains(.maskAlternate) { s += "⌥" }
+        if flags.contains(.maskShift) { s += "⇧" }
+        if flags.contains(.maskCommand) { s += "⌘" }
+        if flags.contains(.maskSecondaryFn) { s += "fn" }
+        return s.isEmpty ? "—" : s
+    }
+    static var talkLabel: String { label(savedTalkChord) }
+    static var talkShortLabel: String { shortLabel(savedTalkChord) }
+    static var promptLabel: String { label(savedPromptModifier) }
+    static var dictationLabel: String { label(savedDictationModifier) }
+
+    /// Reads the saved shortcuts into the live gesture settings.
+    func applySaved() {
+        talkChord = Self.savedTalkChord
+        modifier = Self.savedPromptModifier
+        dictationModifier = Self.savedDictationModifier
+        Log.hotkey.info("shortcuts: talk=\(Self.label(self.talkChord), privacy: .public) prompt=\(Self.label(self.modifier), privacy: .public) dictation=\(Self.label(self.dictationModifier), privacy: .public)")
+    }
     enum Failure: Error { case tapUnavailable }
 
     var onEvent: ((Event) -> Void)?
@@ -37,6 +93,8 @@ final class HotkeyMonitor {
     private var dictating = false
     private var dictationTimer: DispatchWorkItem?
     private var dictationCancelled = false
+    private var dictationPressedAt: TimeInterval = 0
+    private var lastDictationTap: TimeInterval = 0
 
     /// Talk: hold Control + Option together (the recorded gesture). Fires holdBegan
     /// after `talkChordThreshold`; releasing either key ends it.
@@ -184,6 +242,7 @@ final class HotkeyMonitor {
         if down {
             guard !others else { dictationCancelled = true; return }
             dictationCancelled = false
+            dictationPressedAt = Date().timeIntervalSinceReferenceDate
             let work = DispatchWorkItem { [weak self] in
                 guard let self, self.dictationDown, !self.dictationCancelled else { return }
                 self.dictating = true
@@ -197,6 +256,17 @@ final class HotkeyMonitor {
             if dictating {
                 dictating = false
                 emit(.dictationEnded)
+            } else if !dictationCancelled {
+                // A quick tap, released before the hold began. Two of them = hands-free dictation on / off.
+                let now = Date().timeIntervalSinceReferenceDate
+                if now - dictationPressedAt < 0.3 {
+                    if now - lastDictationTap < doubleTapWindow {
+                        lastDictationTap = 0
+                        emit(.dictationToggle)
+                    } else {
+                        lastDictationTap = now
+                    }
+                }
             }
         }
     }

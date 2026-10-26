@@ -46,7 +46,7 @@ struct HomePanelView: View {
             PanelHeader(model: model)
             VStack(spacing: 2) {
                 Text(Self.greeting).font(.system(size: 17, weight: .bold))
-                Text("Hold ⌃ Control + ⌥ Option and tell me what to take off your plate.")
+                Text("Hold \(HotkeyMonitor.talkLabel) and tell me what to take off your plate.")
                     .font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
             }
             .frame(maxWidth: .infinity)
@@ -224,7 +224,7 @@ struct DotPaper: View {
 struct SettingsPanelView: View {
     @ObservedObject var model: NotchViewModel
     static let sections: [(String, String)] = [
-        ("Backend", "server.rack"), ("Talk", "waveform"), ("Permissions", "hand.raised"), ("Character", "face.smiling"),
+        ("Backend", "server.rack"), ("Talk", "waveform"), ("Hotkey", "keyboard"), ("Permissions", "hand.raised"), ("Character", "face.smiling"),
         ("Dictation", "text.cursor"), ("Routines", "clock.arrow.2.circlepath"), ("Integrations", "link"),
         ("Computer use", "cursorarrow.click"), ("Privacy guard", "lock.shield"), ("Memory", "brain"), ("Updates", "arrow.down.circle"), ("Developer", "hammer"),
     ]

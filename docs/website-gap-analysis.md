@@ -21,9 +21,9 @@ Legend: ❌ not built · 🟡 partial · ✅ have it · ⏸ paused upstream too
 | 6 | **Chrome extension**: agents work in your own signed-in Chrome in their own tab group; "Install for me" (1.1.1). | cua-driver drives a separate browser window | ❌ |
 | 7 | **Captions** at the bottom of the screen while it talks; typed questions that get a drawing answer as captions (1.1.1). | Words only in the notch thread | ❌ |
 | 8 | **Routines by voice**: "every Tuesday and Thursday at 5, check my inbox" sets one up; change / pause / delete the same way (1.1.1). | Routines only via a Clicky's `<ROUTINE>` tag; no talk path | 🟡 |
-| 9 | **Screen-aware dictation**: "type a reply to this person in the box here" → screenshot, understands the email, drafts in your voice (1.0.37). | Talk answers aloud; nothing types a draft into the focused field | ❌ |
-| 10 | **Dictation extras**: hands-free mode (double-tap), Fn+Control default, auto language detection (50+), ~450 ms streaming, 10-min sessions with local backup, keeps text through a mic change (1.0.34–1.0.47). | Hold-Option dictation, dictionary, one language | 🟡 |
-| 11 | **Shortcuts you record**: any held combo or double-tap for talk, text and dictation (1.0.11, 1.0.48). | Fixed Control+Option / double-Control / Option | ❌ |
+| 9 | **Screen-aware dictation**: "type a reply to this person in the box here" → screenshot, understands the email, drafts in your voice (1.0.37). | **Built 2026-10-27** (spec §3.17): the chat model's `insert` text is typed into the focused field, in your voice from memory, grounded in the screen and document | ✅ |
+| 10 | **Dictation extras**: hands-free mode (double-tap), Fn+Control default, auto language detection (50+), ~450 ms streaming, 10-min sessions with local backup, keeps text through a mic change (1.0.34–1.0.47). | Hands-free by double-tap built 2026-10-27 (spec §3.17); auto language detection, Fn+Control default, long-session backup still open | 🟡 |
+| 11 | **Shortcuts you record**: any held combo or double-tap for talk, text and dictation (1.0.11, 1.0.48). | **Built 2026-10-27** (spec §3.17): Setup → Hotkey records modifier combos for Talk, Text box and Dictation | ✅ |
 | 12 | **Quiet when busy**: no spoken updates, cursor text, chimes or morning hello on a call, while screen sharing, in Focus or DND; separate switches for voice and cursor text (1.0.51). | Sounds + notifications toggles only; no call / share / Focus detection | ❌ |
 | 13 | **Voice settings**: speech speed 0.5–1.5×, microphone selection, kid-friendly voices (1.0.45, 1.0.16). | Voice picker + preview only | 🟡 |
 | 14 | **Audio resilience**: mic failover to built-in, Bluetooth profile handling, lid-closed mic switch, muted-speaker answer copied to clipboard with a volume fix, reconnect on a dropped voice connection (1.0.48, 1.0.53). | Nothing of this | ❌ |
@@ -59,8 +59,8 @@ redaction).
 1. ~~**Walkthrough mode** (#1)~~ — built 2026-10-27.
 2. ~~**Memory of you** (#3)~~ — built 2026-10-27.
 3. ~~**Whole-document reading** (#4)~~ — built 2026-10-27.
-4. **Screen-aware dictation** (#9) + hands-free dictation + a shortcut recorder
-   (#10, #11).
+4. ~~**Screen-aware dictation** (#9) + hands-free dictation + a shortcut recorder
+   (#10, #11)~~ — built 2026-10-27.
 5. **Drive from talk** (#5): voice-triggered computer use with the live
    hand-back rule (mouse moves, talk or Escape stops it).
 6. **Captions** (#7), **quiet on calls** (#12), **voice speed + mic selection**

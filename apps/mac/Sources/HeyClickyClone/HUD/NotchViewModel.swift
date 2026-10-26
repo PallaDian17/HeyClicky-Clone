@@ -52,7 +52,7 @@ struct ConversationModel: Equatable {
     var status: String?            // "Listening…", "Thinking…", "Speaking…"
     var canClear = false           // annotations on screen
     var note: String?              // "Read the whole PDF · 3,200 words"
-    var hint = "Hold ⌃ Control + ⌥ Option to talk"
+    var hint = "Hold \(HotkeyMonitor.talkLabel) to talk"
 }
 
 struct SuggestionCardModel: Equatable, Identifiable {
@@ -86,7 +86,7 @@ final class NotchViewModel: ObservableObject {
     }
 
     func openConversation() {
-        set(.conversation(lastThread ?? ConversationModel(messages: [.init(role: .assistant, text: "Hold ⌃ Control + ⌥ Option and ask me anything about what's on your screen.")])))
+        set(.conversation(lastThread ?? ConversationModel(messages: [.init(role: .assistant, text: "Hold \(HotkeyMonitor.talkLabel) and ask me anything about what's on your screen.")])))
     }
     func rememberThread(_ c: ConversationModel) { lastThread = c }
 

@@ -78,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         talk.onWalkthrough = { [weak self] goal in self?.walkthrough.start(goal: goal) }
         talk.transcriptHook = { [weak self] text in self?.walkthrough.handle(transcript: text) ?? false }
         wireHotkey()
+        hotkey.applySaved()
         startHotkeyWhenPermitted()
 
         permissions.refresh()
@@ -232,6 +233,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             overlay.clear()
             dictation.cancel()
             if agents.stopAll() { notch.model.set(.notice("Stopping…"), autoDismissAfter: 2) } else { notch.model.collapse() }
+        case .dictationToggle:
+            if dictation.phase == .listening { dictation.end() }
+            else if dictation.phase == .idle, talk.phase == .idle { dictation.begin(handsFree: true) }
         case .dictationBegan:
             guard talk.phase == .idle else { return }
             dictation.begin()

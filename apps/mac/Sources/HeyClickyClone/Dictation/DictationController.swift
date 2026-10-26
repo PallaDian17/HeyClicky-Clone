@@ -18,6 +18,8 @@ final class DictationController: ObservableObject {
     }
 
     @Published private(set) var phase: Phase = .idle
+    /// Started by a double-tap: keeps listening until the next double-tap, Esc, or end().
+    private(set) var handsFree = false
     let dictionary = DictationDictionary()
 
     private let notch: NotchViewModel
@@ -35,8 +37,9 @@ final class DictationController: ObservableObject {
 
     // MARK: - Gesture entry points
 
-    func begin() {
+    func begin(handsFree: Bool = false) {
         guard phase == .idle else { return }
+        self.handsFree = handsFree
         learnTask?.cancel()
         field = FocusedField.current()
 
@@ -55,7 +58,7 @@ final class DictationController: ObservableObject {
         }
 
         phase = .listening
-        notch.set(.dictating(""))
+        notch.set(.dictating(handsFree ? "Hands-free · double-tap \(HotkeyMonitor.shortLabel(HotkeyMonitor.savedDictationModifier)) again to stop" : ""))
         Task { await startTranscriber() }
     }
 

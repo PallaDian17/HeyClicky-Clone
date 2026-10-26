@@ -324,6 +324,35 @@ Website gap #4 (`docs/website-gap-analysis.md`). `Capture/DocumentReader.swift`.
   the repo page in Chrome — the last heading of the README named without
   scrolling (1,773 words read).
 
+### 3.17 Screen-aware dictation, hands-free dictation, shortcut recorder — built 2026-10-27
+Website gaps #9, #10 (part), #11 (`docs/website-gap-analysis.md`).
+- **Screen-aware dictation** ("type a reply to this person in the box here"):
+  the chat model gets an `insert` field. When the user asks it to type, write,
+  draft or put something into a text box on screen, it writes the full text in
+  `insert.text` — first person, the user's tone and sign-off from memory,
+  grounded in the screenshot and the whole-document text — and a one-sentence
+  spoken confirmation in `text`. The app (`TalkCoordinator.insertDraft`)
+  types it into the field that had focus when the chord was pressed
+  (`FocusedField.current()` at `beginHold`), through the dictation insertion
+  path (paste + verify, AX fallback). Refuses password fields and secure input;
+  a privacy-withheld app, no focused field, or a failed insertion falls back to
+  the clipboard with the draft shown in the thread. The thread notes "Typed 16
+  words into TextEdit". Verified: an email-shaped note in TextEdit got "Hi
+  Sam, Tuesday at 3pm works for me, and yes, I got the deck. Best, Ashish" —
+  the sign-off came from memory.
+- **Hands-free dictation**: a quick double-tap of the dictation modifier
+  (`HotkeyMonitor` `.dictationToggle`: two taps under 0.3 s each within the
+  double-tap window, neither long enough to start the hold) starts dictation
+  that keeps listening until the next double-tap, Esc or the normal end; the
+  notch says "Hands-free · double-tap ⌥ again to stop".
+- **Shortcut recorder** (Setup → Hotkey, `Home/ShortcutRecorder.swift`): three
+  rows — Talk (hold), Text box (double-tap), Dictation (hold / double-tap) —
+  each with Record: press the modifier combination, let go, and it is saved
+  (`ClickyShortcut*` as raw `CGEventFlags`, modifier bits only) and applied
+  live (`HotkeyMonitor.applySaved`). Reset to defaults. A warning shows when
+  the talk keys equal another gesture's (the talk hold wins). Every hint in the
+  app reads the saved keys (`HotkeyMonitor.talkLabel` etc.).
+
 ### 3.2 Talk mode
 - Trigger: global modifier double-tap (default: double-tap Control) or hold
   Fn; configurable with a shortcut recorder. Needs a CGEvent tap and

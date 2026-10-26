@@ -57,6 +57,8 @@ export type ChatResponse = {
   clarify: boolean;
   /** Set when the user asked to be walked through a multi-step task on screen; the app starts walkthrough mode with this goal. */
   walkthrough: { goal: string } | null;
+  /** Screen-aware dictation: text the app should type into the focused field (a drafted reply), when the user asked for that. */
+  insert: { text: string } | null;
 };
 
 const responseSchema = {
@@ -104,8 +106,14 @@ const responseSchema = {
       properties: { goal: { type: "string" } },
       required: ["goal"],
     },
+    insert: {
+      type: ["object", "null"],
+      additionalProperties: false,
+      properties: { text: { type: "string" } },
+      required: ["text"],
+    },
   },
-  required: ["text", "element_id", "box", "handoff", "targets", "follow_ups", "clarify", "walkthrough"],
+  required: ["text", "element_id", "box", "handoff", "targets", "follow_ups", "clarify", "walkthrough", "insert"],
 };
 
 function describeElements(req: ChatRequest): string {
@@ -176,8 +184,9 @@ chatRoute.post("/", async (c) => {
     const follow_ups = (value.follow_ups ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 2);
     const clarify = Boolean(value.clarify);
     const walkthrough = value.walkthrough && value.walkthrough.goal.trim() && !clarify ? { goal: value.walkthrough.goal.trim() } : null;
-    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} region=${req.region ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} memory=${req.memory ? "yes" : "no"} document=${req.document ? `${req.document.kind}:${req.document.text.length}c` : "no"} target=${element_id ?? (box ? "box" : "none")} targets=${targets.length} followups=${follow_ups.length} clarify=${clarify} handoff=${handoff ? "yes" : "no"} walkthrough=${walkthrough ? "yes" : "no"}`);
-    return c.json({ text: value.text, element_id, box, handoff, targets, follow_ups, clarify, walkthrough, usage });
+    const insert = value.insert && value.insert.text.trim() && !clarify ? { text: value.insert.text.trim().slice(0, 6000) } : null;
+    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} region=${req.region ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} memory=${req.memory ? "yes" : "no"} document=${req.document ? `${req.document.kind}:${req.document.text.length}c` : "no"} target=${element_id ?? (box ? "box" : "none")} targets=${targets.length} followups=${follow_ups.length} clarify=${clarify} handoff=${handoff ? "yes" : "no"} walkthrough=${walkthrough ? "yes" : "no"} insert=${insert ? `${insert.text.length}c` : "no"}`);
+    return c.json({ text: value.text, element_id, box, handoff, targets, follow_ups, clarify, walkthrough, insert, usage });
   } catch (err) {
     const status = err instanceof OpenAIError ? 502 : 500;
     console.error("[chat] failed:", err);
