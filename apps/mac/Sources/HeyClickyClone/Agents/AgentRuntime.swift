@@ -80,6 +80,16 @@ final class AgentRuntime: ObservableObject {
         return Card(tag: .done, line: "Done — " + String(text.prefix(160)))
     }
 
+    /// Progress goes to the notch pill unless the panel is already showing that
+    /// Clicky's page, the list or the corkboard, which render it inline.
+    private func hud(_ agentID: UUID, _ state: NotchState, autoDismissAfter seconds: TimeInterval? = nil) {
+        switch notch.state {
+        case .clicky(let id) where id == agentID: return
+        case .clickys, .home: return
+        default: notch.set(state, autoDismissAfter: seconds)
+        }
+    }
+
     func transcript(for agentID: UUID) -> [TranscriptEntry] {
         if let t = transcripts[agentID] { return t }
         guard let agent = store.agent(id: agentID) else { return [] }
@@ -107,7 +117,7 @@ final class AgentRuntime: ObservableObject {
         setActivity(agentID, "Starting…")
         append(.init(role: .user, text: text), to: agentID)
         routineTurns[agentID] = routine?.id
-        notch.set(.agent(name: agent.name, step: routine.map { "Routine: \($0.title)" } ?? "Starting…"))
+        hud(agentID, .agent(name: agent.name, step: routine.map { "Routine: \($0.title)" } ?? "Starting…"))
         Task { @MainActor in
             let turnServers = await integrations?.prepareForTurn() ?? IntegrationsHost.TurnServers()
             starting.remove(agentID)
@@ -147,7 +157,7 @@ final class AgentRuntime: ObservableObject {
             runners[agentID] = nil
             let message = (error as? LocalizedError)?.errorDescription ?? "Could not start the agent."
             append(.init(role: .error, text: message), to: agentID)
-            notch.set(.notice(message), autoDismissAfter: 6)
+            hud(agentID, .notice(message), autoDismissAfter: 6)
             if let routineID = routineTurns.removeValue(forKey: agentID) { onRoutineTurnFinished?(routineID, message, true) }
         }
     }
@@ -259,7 +269,7 @@ final class AgentRuntime: ObservableObject {
                 let entry = TranscriptEntry(role: .assistant, text: delta, streaming: true)
                 streamingEntry[agentID] = entry.id
                 append(entry, to: agentID)
-                notch.set(.agent(name: agent.name, step: "Writing…"))
+                hud(agentID, .agent(name: agent.name, step: "Writing…"))
             }
         case .assistantText(let raw):
             let text = PrivacyGuard.redact(raw).text
@@ -275,7 +285,7 @@ final class AgentRuntime: ObservableObject {
             let entry = TranscriptEntry(role: .command, text: summary, detail: "", streaming: true)
             toolEntries[id] = entry.id
             append(entry, to: agentID)
-            notch.set(.agent(name: agent.name, step: summary))
+            hud(agentID, .agent(name: agent.name, step: summary))
             Log.agents.debug("tool \(name, privacy: .public): \(summary, privacy: .public)")
         case .toolFinished(let id, let rawOutput, let isError):
             let output = PrivacyGuard.redact(rawOutput).text
@@ -333,18 +343,18 @@ final class AgentRuntime: ObservableObject {
             onRoutineTurnFinished?(routineID, isError ? finalText : summary, isError)
             let quiet = summary.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("nothing new")
             if isError {
-                notch.set(.notice("\(agent.name): \(finalText.prefix(120))"), autoDismissAfter: 8)
+                hud(agentID, .notice("\(agent.name): \(finalText.prefix(120))"), autoDismissAfter: 8)
             } else if quiet {
                 notch.collapse()   // a routine with nothing to say stays out of the way
             } else {
-                notch.set(.reply("\(agent.name): \(summary)"), autoDismissAfter: 15)
+                hud(agentID, .reply("\(agent.name): \(summary)"), autoDismissAfter: 15)
             }
             return
         }
         if isError {
-            notch.set(.notice("\(agent.name): \(finalText.prefix(120))"), autoDismissAfter: 8)
+            hud(agentID, .notice("\(agent.name): \(finalText.prefix(120))"), autoDismissAfter: 8)
         } else {
-            notch.set(.reply("\(agent.name): \(summary)"), autoDismissAfter: 12)
+            hud(agentID, .reply("\(agent.name): \(summary)"), autoDismissAfter: 12)
         }
     }
 

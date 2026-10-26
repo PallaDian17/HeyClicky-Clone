@@ -6,11 +6,14 @@ agents that run tasks on the Mac through Claude Code and a computer-use
 driver, dictation, and scheduled routines.
 
 Status: **the notch panel is the app (2026-10-26).** Click the menu-bar
-icon (or the hovered pill) and the panel drops from the notch with a greeting
-and a corkboard: the selected Clicky's card (Needs you / Done / Working, Open
-<file>, Full report) with the other Clickys as sticky notes; the chat icon
-shows the talk thread, the gear shows settings inside the panel, and an
-"Update app" pill appears when an update is found. Hold ⌃ Control + ⌥ Option,
+icon and a list of your Clickys drops from the notch (last message, day,
+unread dot); pick one and its chat opens in the panel with coloured starter
+cards, a Type… field and push-to-talk: hold ⌃ Control + ⌥ Option while its
+page is open, speak, release to send. The mascot button shows the corkboard
+home: the selected Clicky's card (Needs you / Done / Working, Open <file>,
+Full report) with the others as sticky notes; the chat icon shows the talk
+thread, the gear shows settings inside the panel, and an "Update app" pill
+appears when an update is found. Hold ⌃ Control + ⌥ Option,
 speak, lasso anything while you hold; the answer is read aloud, shown as a
 thread with follow-up chips, and marked on screen with numbered badges and
 underlines as it goes. A lasso with no words makes Dicky ask what you want.

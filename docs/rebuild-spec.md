@@ -141,6 +141,40 @@ from the menu bar IS the app. `HUD/HomePanel.swift`.
 - The Home window remains as the pop-out (full transcript, output column,
   Skills/Suggestions pages).
 
+### 3.3c Clickys in the panel: list, chat, push-to-talk — built 2026-10-26
+Recording item 4 (`docs/recording-gap-analysis.md` §3). `HUD/ClickyPanel.swift`,
+`Talk/ClickyPushToTalk.swift`.
+- **Menu-bar popover** (`NotchState.clickys`, `ClickyListView`): the menu-bar
+  click now opens this (a second click closes whichever page is open). One row
+  per Clicky: avatar, name, last message (or the live activity line while it
+  works, or its purpose when the thread is empty), the day ("Friday" /
+  "Yesterday" / a time today), a blue unread dot when the last assistant entry
+  is newer than the last look at that thread (`NotchViewModel.seenAt`). Footer:
+  **Apps +** and **New Clicky**. Header as everywhere (home · thread · Update app
+  · pop-out · gear).
+- **A Clicky's chat** (`NotchState.clicky(id)`, `ClickyChatView`, 780×≈510):
+  left list with search and "+", the account row (first name · gear); right
+  pane = the thread (user bubbles right in blue, Clicky left, errors red, last
+  8), its opening line when empty ("Hi, I'm Desk. …") and **"Suggested: send
+  one and I'll get started"** with the three starters as **coloured cards**
+  (yellow / pink / blue, `SuggestionCard`) each with a send arrow; the live
+  activity line with a spinner while it works. Bottom ledge: the Clicky's
+  mascot peeking over a blue pill **"Hold ⌃ Control + ⌥ Option to talk to
+  Desk"**, a **Type…** field (Return sends), and Stop while running.
+- **Push-to-talk into the Clicky** (`ClickyPushToTalk`): while a Clicky's page
+  is open the talk chord no longer starts general talk. It records with the
+  on-device Apple recogniser (same locale as dictation), the pill turns green
+  and shows the words so far + **"· Release to send"**, and the release sends
+  the redacted transcript (`PrivacyGuard.redact`) to that Clicky as a turn.
+  Nothing heard → "Didn't catch that" and back to the page. Esc cancels.
+- The runtime's own notch updates (`.agent` steps, the finishing `.reply` /
+  `.notice`) go through `AgentRuntime.hud(_:_:)`, which skips them while that
+  Clicky's page, the list or the corkboard is open, so the page is not torn
+  down mid-conversation — the thread shows the progress inline instead.
+- Debug: `hud/clickys`, `hud/clicky?slug=`, `clicky/partial?text=` (held-pill
+  look without a microphone), `clicky/talk?text=&slug=` (synthetic release →
+  real turn).
+
 ### 3.2 Talk mode
 - Trigger: global modifier double-tap (default: double-tap Control) or hold
   Fn; configurable with a shortcut recorder. Needs a CGEvent tap and

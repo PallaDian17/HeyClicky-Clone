@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let computerUse = ComputerUseHost()
     private(set) lazy var agents = AgentRuntime(store: AgentStore(), computerUse: computerUse, privacy: privacy, notch: notch.model, model: config.agentModel)
     private(set) lazy var dictation = DictationController(notch: notch.model, backend: backend, privacy: privacy)
+    private(set) lazy var clickyTalk = ClickyPushToTalk(notch: notch.model, runtime: agents)
     private(set) lazy var integrations = IntegrationsHost(backend: backend)
     let characters = CharacterStore()
     private(set) lazy var updates = UpdateController()
@@ -189,13 +190,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleHotkey(_ event: HotkeyMonitor.Event) {
         switch event {
         case .holdBegan:
-            talk.beginHold()
+            if let id = notch.model.openClickyID { clickyTalk.begin(agentID: id) } else { talk.beginHold() }
         case .holdEnded:
-            talk.endHold()
+            if clickyTalk.isActive { clickyTalk.end() } else { talk.endHold() }
         case .doubleTap:
             if talk.phase != .idle { talk.cancel() }
             notch.model.toggle(.prompt)
         case .escape:
+            clickyTalk.cancel()
             talk.cancel()
             overlay.clear()
             dictation.cancel()
@@ -231,6 +233,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             auth.handle(callbackURL: url)
         case "hud":
             handleDebugHUDURL(url)
+        case "clicky":
+            // `clicky/talk?text=…[&slug=]` sends words to the open (or named) Clicky as push-to-talk would;
+            // `clicky/partial?text=` shows the held-pill state without a microphone.
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let text = items.first(where: { $0.name == "text" })?.value ?? "What can you do for me?"
+            let slug = items.first(where: { $0.name == "slug" })?.value
+            let id = notch.model.openClickyID ?? agents.store.agents.first(where: { $0.slug == slug })?.id ?? agents.store.agents.first?.id
+            guard let id else { return }
+            switch url.lastPathComponent {
+            case "partial": notch.model.openClicky(id); notch.model.pushToTalk = .init(agentID: id, text: text)
+            default: notch.model.openClicky(id); clickyTalk.deliverSynthetic(text, to: id)
+            }
         case "backend":
             // `backend/restart` · `backend/status`
             if url.lastPathComponent == "restart" { backendSupervisor.restart() }
@@ -538,6 +552,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "dictating": notch.model.set(.dictating(text ?? ""))
         case "home": notch.model.set(.home)
         case "settings": notch.model.set(.settings)
+        case "clickys": notch.model.set(.clickys)
+        case "clicky":
+            let slug = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "slug" })?.value
+            if let slug, let a = agents.store.agents.first(where: { $0.slug == slug }) { notch.model.openClicky(a.id) }
+            else if let a = agents.store.agents.first { notch.model.openClicky(a.id) }
         case "conversation":
             var c = ConversationModel()
             c.messages = [.init(role: .assistant, text: "What would you like me to do with the highlighted section on the left? I can explain what it is, or point out specific controls if you want.")]
@@ -578,8 +597,12 @@ extension AppDelegate: StatusBarActions {
         permissionsWindow?.show()
     }
 
+    /// Menu-bar click: the popover list of Clickys (recorded); a second click closes it.
     func toggleNotchHome() {
-        if case .home = notch.model.state { notch.model.collapse() } else { notch.model.set(.home) }
+        switch notch.model.state {
+        case .clickys, .home, .clicky, .settings: notch.model.collapse()
+        default: notch.model.set(.clickys)
+        }
     }
 
     func showOnboarding() { showOnboarding(step: nil) }

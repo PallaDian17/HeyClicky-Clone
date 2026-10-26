@@ -137,7 +137,15 @@ greeting + corkboard (selected Clicky's card with Needs you / Done / Working,
 Open <file> / Full report, sticky notes for the others), the chat icon opens
 the talk thread, the gear opens Setup inside the panel with a section
 sidebar, and an "Update app" pill shows in the header when Sparkle finds one
-(`HUD/HomePanel.swift`, spec §3.1a). Items 4–5 remain.
+(`HUD/HomePanel.swift`, spec §3.1a). Item 4 is built too: the menu-bar click
+shows the popover list of Clickys (avatar, last message, day, unread dot,
+Apps + / New Clicky), a row opens that Clicky's chat in the panel (list +
+search on the left, thread with the three coloured suggestion cards and send
+arrows, the mascot over the ledge, Type… field) and, with that page open,
+the talk chord is push-to-talk straight into it — the pill shows the words
+and "Release to send", release sends the turn (`HUD/ClickyPanel.swift`,
+`Talk/ClickyPushToTalk.swift`, spec §3.3c). Item 5 (the site-awareness bar)
+remains.
 
 ## Recommended order
 1. **Backend supervised by the app** (start, restart, status, orphan cleanup).

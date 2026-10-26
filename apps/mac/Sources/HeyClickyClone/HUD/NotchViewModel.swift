@@ -15,6 +15,14 @@ enum NotchState: Equatable {
     case conversation(ConversationModel)       // the talk thread (recorded layout)
     case home                                  // greeting + corkboard (the recorded main surface)
     case settings                              // Setup inside the panel
+    case clickys                               // the menu-bar list of Clickys
+    case clicky(UUID)                          // one Clicky's chat, with push-to-talk
+}
+
+/// The talk chord held while a Clicky's page is open: the words so far.
+struct PushToTalkState: Equatable {
+    var agentID: UUID
+    var text: String
 }
 
 /// The talk as a thread: assistant and user bubbles, suggestion chips, and the
@@ -58,7 +66,7 @@ final class NotchViewModel: ObservableObject {
     /// States that need the keyboard (text fields) and should keep the panel key.
     var wantsKeyboard: Bool {
         switch state {
-        case .prompt, .conversation, .home, .settings: return true
+        case .prompt, .conversation, .home, .settings, .clickys, .clicky: return true
         default: return false
         }
     }
@@ -67,6 +75,14 @@ final class NotchViewModel: ObservableObject {
         set(.conversation(lastThread ?? ConversationModel(messages: [.init(role: .assistant, text: "Hold ⌃ Control + ⌥ Option and ask me anything about what's on your screen.")])))
     }
     func rememberThread(_ c: ConversationModel) { lastThread = c }
+
+    @Published var pushToTalk: PushToTalkState?
+    /// When each Clicky's thread was last looked at, for the unread dots.
+    @Published var seenAt: [UUID: Date] = [:]
+    func markSeen(_ id: UUID) { seenAt[id] = Date() }
+    func openClicky(_ id: UUID) { selectedAgentID = id; set(.clicky(id)) }
+    /// The Clicky whose page is open, if any (push-to-talk goes to it).
+    var openClickyID: UUID? { if case .clicky(let id) = state { return id } else { return nil } }
     @Published var character: ClickyCharacter = ClickyCharacter.loadUser()
     /// Shown on the reply card after a circle-to-ask: hands the same crop + question + answer to a Clicky.
     @Published var tellMoreAvailable = false
@@ -117,6 +133,11 @@ final class NotchViewModel: ObservableObject {
             return CGSize(width: 560, height: n.height + 420)
         case .settings:
             return CGSize(width: 820, height: n.height + 560)
+        case .clickys:
+            let rows = max(1, app?.agents.store.agents.count ?? 1)
+            return CGSize(width: 420, height: n.height + 96 + CGFloat(min(rows, 8)) * 50)
+        case .clicky:
+            return CGSize(width: 780, height: n.height + 480)
         case .conversation(let c):
             let shown = c.messages.suffix(3)
             let textHeight = shown.reduce(CGFloat(0)) { $0 + 30 + CGFloat(min(6, $1.text.count / 48)) * 17 }
