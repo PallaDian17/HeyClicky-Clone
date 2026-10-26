@@ -1,5 +1,6 @@
 import AppKit
 import ClickyPrivacy
+import SwiftUI
 import UserNotifications
 
 /// Drives agents on Claude Code: one headless `claude` process per turn,
@@ -51,6 +52,33 @@ final class AgentRuntime: ObservableObject {
     }
 
     var isAvailable: Bool { ClaudeCodeRunner.binary != nil }
+
+    /// What the corkboard card says about a Clicky.
+    struct Card: Equatable {
+        enum Tag: Equatable {
+            case idle, working, done, needsYou
+            var label: String {
+                switch self { case .idle: return "Idle"; case .working: return "Working"; case .done: return "Done"; case .needsYou: return "Needs you" }
+            }
+            var color: Color {
+                switch self { case .idle: return .gray; case .working: return .green; case .done: return Color(red: 0.1, green: 0.55, blue: 0.3); case .needsYou: return .red }
+            }
+        }
+        var tag: Tag
+        var line: String
+    }
+
+    func card(for agent: Agent) -> Card {
+        if isRunning(agent.id) { return Card(tag: .working, line: activity[agent.id] ?? "Working…") }
+        let entries = transcript(for: agent.id)
+        guard let last = entries.last(where: { $0.role == .assistant || $0.role == .error }) else {
+            return Card(tag: .idle, line: "Nothing running. Hold the voice keys and give it something to do.")
+        }
+        let text = last.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if last.role == .error { return Card(tag: .needsYou, line: text) }
+        if text.hasSuffix("?") { return Card(tag: .needsYou, line: text) }
+        return Card(tag: .done, line: "Done — " + String(text.prefix(160)))
+    }
 
     func transcript(for agentID: UUID) -> [TranscriptEntry] {
         if let t = transcripts[agentID] { return t }

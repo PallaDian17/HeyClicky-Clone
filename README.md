@@ -5,13 +5,17 @@ HUD, push-to-talk screen-aware voice chat that can draw on the screen, named
 agents that run tasks on the Mac through Claude Code and a computer-use
 driver, dictation, and scheduled routines.
 
-Status: **talk rebuilt to the recordings + the app owns its backend
-(2026-10-26).** Hold ⌃ Control + ⌥ Option, speak, lasso anything while you
-hold; the answer is read aloud, shown as a thread in the notch with follow-up
-chips, and marked on screen with numbered badges and underlines as it goes.
-A lasso with no words makes Dicky ask what you want. The backend that talk
-depends on is now started, watched and restarted by the app, with its state
-in Setup. See `docs/recording-gap-analysis.md`.
+Status: **the notch panel is the app (2026-10-26).** Click the menu-bar
+icon (or the hovered pill) and the panel drops from the notch with a greeting
+and a corkboard: the selected Clicky's card (Needs you / Done / Working, Open
+<file>, Full report) with the other Clickys as sticky notes; the chat icon
+shows the talk thread, the gear shows settings inside the panel, and an
+"Update app" pill appears when an update is found. Hold ⌃ Control + ⌥ Option,
+speak, lasso anything while you hold; the answer is read aloud, shown as a
+thread with follow-up chips, and marked on screen with numbered badges and
+underlines as it goes. A lasso with no words makes Dicky ask what you want.
+The backend that talk depends on is started, watched and restarted by the
+app. See `docs/recording-gap-analysis.md`.
 
 Earlier: **cursor tracker + build provenance (2026-10-23).** A blue ring now
 rides beside the mouse while you talk or dictate: waveform while listening,

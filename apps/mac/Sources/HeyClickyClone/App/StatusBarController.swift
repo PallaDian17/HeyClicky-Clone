@@ -3,6 +3,7 @@ import AppKit
 @MainActor
 protocol StatusBarActions: AnyObject {
     func openHome()
+    func toggleNotchHome()
     func showPermissions()
     func showOnboarding()
     func checkForUpdates()
@@ -24,8 +25,24 @@ final class StatusBarController {
         if let button = item.button {
             button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Hi Dicky")
             button.image?.isTemplate = true
+            button.target = self
+            button.action = #selector(statusClicked)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         rebuildMenu()
+    }
+
+    private var menu = NSMenu()
+
+    /// Left click: the notch home panel. Right click: the menu.
+    @objc private func statusClicked() {
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            item.menu = menu
+            item.button?.performClick(nil)
+            DispatchQueue.main.async { self.item.menu = nil }
+        } else {
+            actions?.toggleNotchHome()
+        }
     }
 
     func update(authState: AuthManager.State) {
@@ -35,6 +52,7 @@ final class StatusBarController {
 
     private func rebuildMenu() {
         let menu = NSMenu()
+        defer { self.menu = menu }
 
         let accountTitle: String
         switch authState {
@@ -74,8 +92,8 @@ final class StatusBarController {
             break
         }
         menu.addItem(makeItem("Quit Hi Dicky", #selector(quit), key: "q"))
-
-        item.menu = menu
+        // Kept detached: attached only for the duration of a right-click (see statusClicked),
+        // so a left click reaches statusClicked and opens the notch home instead.
     }
 
     private func makeItem(_ title: String, _ selector: Selector, key: String = "") -> NSMenuItem {

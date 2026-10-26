@@ -128,11 +128,16 @@ offer the connector and chips that start a Clicky turn with the page URL.
 - "Hover-dwell ring" is the cursor marker, not a notch effect.
 
 ## Status (2026-10-26)
-Items 1 and 2 are built and verified live: the app owns the backend
-(start/restart/status/orphan cleanup), and talk mode now uses the Control +
-Option chord, the silent lasso, the clarify step with chips, numbered
-multi-target annotations revealed with speech, Clear, follow-up chips and the
-triangle marker. Items 3–5 remain.
+Items 1–3 are built and verified live: the app owns the backend
+(start/restart/status/orphan cleanup); talk mode uses the Control + Option
+chord, the silent lasso, the clarify step with chips, numbered multi-target
+annotations revealed with speech, Clear, follow-up chips and the triangle
+marker; and the notch panel is the main surface — menu-bar click opens the
+greeting + corkboard (selected Clicky's card with Needs you / Done / Working,
+Open <file> / Full report, sticky notes for the others), the chat icon opens
+the talk thread, the gear opens Setup inside the panel with a section
+sidebar, and an "Update app" pill shows in the header when Sparkle finds one
+(`HUD/HomePanel.swift`, spec §3.1a). Items 4–5 remain.
 
 ## Recommended order
 1. **Backend supervised by the app** (start, restart, status, orphan cleanup).

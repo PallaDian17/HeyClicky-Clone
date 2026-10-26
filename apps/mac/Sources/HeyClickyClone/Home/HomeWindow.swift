@@ -70,6 +70,8 @@ struct HomeView: View {
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
+        ScrollView {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 12) {
                 ClickyCharacterView(character: characters.character, mood: .happy, size: 56)
@@ -385,7 +387,12 @@ struct HomeView: View {
         }
         .padding(24)
         .padding(.top, 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .setupScrollTo)) { note in
+            if let name = note.object as? String { withAnimation { proxy.scrollTo("section-\(name)", anchor: .top) } }
+        }
+        }
     }
 
     private func addProtectedApp() {
@@ -421,7 +428,7 @@ struct HomeView: View {
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Text(title.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary).id("section-\(title)")
             VStack(alignment: .leading, spacing: 8, content: content)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -45,10 +45,12 @@ struct NotchRootView: View {
             if model.hovering {
                 HStack(spacing: 10) {
                     ClickyCharacterView(character: model.character, mood: .awake, size: 26)
-                    Text("hold ⌃⌥ to talk · double-tap ⌃ to ask")
+                    Text("hold ⌃⌥ to talk · double-tap ⌃ to ask · click to open")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(0.75))
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { model.set(.home) }
                 .transition(.opacity)
             }
         case .listening:
@@ -160,8 +162,13 @@ struct NotchRootView: View {
             }
             .padding(.top, 8)
             .transition(.opacity)
+        case .home:
+            HomePanelView(model: model).transition(.opacity)
+        case .settings:
+            SettingsPanelView(model: model).transition(.opacity)
         case .conversation(let c):
             VStack(alignment: .leading, spacing: 8) {
+                PanelHeader(model: model)
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 8) {

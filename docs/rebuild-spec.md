@@ -108,6 +108,39 @@ Design choices that differ from or simplify the original:
 - Auto-dismiss with a visible countdown; hover-dwell to pin.
 - Keyboard focus is released back to the previous app when the HUD closes.
 
+### 3.1a The notch panel as the main surface — built 2026-10-26
+Recording item 3 (`docs/recording-gap-analysis.md` §1): the panel that drops
+from the menu bar IS the app. `HUD/HomePanel.swift`.
+- **Opening it**: left-click the menu-bar item (`StatusBarController` keeps
+  its menu detached and attaches it only for a right-click, so a left click
+  reaches `toggleNotchHome`), click the hovered idle pill, or the debug routes
+  `hud/home` / `hud/settings`. `NotchState.home` (560×≈450) and `.settings`
+  (820×≈590); `wantsKeyboard` makes the panel key for home, settings, the
+  thread and the prompt, so their fields take typing.
+- **Header** on every page (`PanelHeader`): mascot → home, chat bubble → the
+  talk thread (the last `ConversationModel` is remembered, else a hint
+  message), an orange **Update app** pill when `UpdateController.lastResult`
+  says one is available, pop-out → the Home window, gear → settings.
+- **Home**: greeting by time of day + first name from `NSFullUserName()`, the
+  recorded line under it, then the **corkboard** (`CorkboardView`): the selected
+  Clicky as a white dotted-paper card (`AgentCard`: red/green/grey dot, tag,
+  name, status line, **Open <EXT>** for the newest `output/` file written
+  within 20 min of the Clicky's last activity, **Full report** → Home window
+  with that Clicky selected, **Stop** while working); the other Clickys as
+  rotated pastel **sticky notes** (`StickyNote`) that click to the centre.
+  Footer: **New Clicky** and **Apps** (both open the Home window).
+- **Card status** is derived, not stored (`AgentRuntime.card(for:)`): running →
+  *Working* + its live activity line; last transcript entry an error or an
+  assistant message ending in "?" → *Needs you*; an assistant message → *Done —
+  …*; nothing → *Idle* with the recorded "Nothing running. Hold the voice keys
+  and give it something to do."
+- **Settings**: the Setup page (`HomeView`) inside the panel with a sidebar of
+  jump links (Backend · Talk · Permissions · Character · Dictation · Routines ·
+  Integrations · Computer use · Privacy guard · Updates · Developer) that
+  scroll to the section (`.setupScrollTo`), version in the sidebar footer.
+- The Home window remains as the pop-out (full transcript, output column,
+  Skills/Suggestions pages).
+
 ### 3.2 Talk mode
 - Trigger: global modifier double-tap (default: double-tap Control) or hold
   Fn; configurable with a shortcut recorder. Needs a CGEvent tap and

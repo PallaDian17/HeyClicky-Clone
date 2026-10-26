@@ -13,6 +13,8 @@ enum NotchState: Equatable {
     case dictated(String)                      // what was inserted
     case suggestions([SuggestionCardModel])    // morning cards
     case conversation(ConversationModel)       // the talk thread (recorded layout)
+    case home                                  // greeting + corkboard (the recorded main surface)
+    case settings                              // Setup inside the panel
 }
 
 /// The talk as a thread: assistant and user bubbles, suggestion chips, and the
@@ -48,6 +50,23 @@ final class NotchViewModel: ObservableObject {
 
     let geometry: NotchGeometry
     var onPromptSubmitted: ((String) -> Void)?
+    /// The app, for the home and settings pages (set at launch).
+    weak var app: AppDelegate?
+    @Published var selectedAgentID: UUID?
+    private var lastThread: ConversationModel?
+
+    /// States that need the keyboard (text fields) and should keep the panel key.
+    var wantsKeyboard: Bool {
+        switch state {
+        case .prompt, .conversation, .home, .settings: return true
+        default: return false
+        }
+    }
+
+    func openConversation() {
+        set(.conversation(lastThread ?? ConversationModel(messages: [.init(role: .assistant, text: "Hold ⌃ Control + ⌥ Option and ask me anything about what's on your screen.")])))
+    }
+    func rememberThread(_ c: ConversationModel) { lastThread = c }
     @Published var character: ClickyCharacter = ClickyCharacter.loadUser()
     /// Shown on the reply card after a circle-to-ask: hands the same crop + question + answer to a Clicky.
     @Published var tellMoreAvailable = false
@@ -94,11 +113,15 @@ final class NotchViewModel: ObservableObject {
             return CGSize(width: 480, height: n.height + 40 + CGFloat(lines) * 18)
         case .suggestions(let cards):
             return CGSize(width: 520, height: n.height + 52 + CGFloat(max(1, cards.count)) * 58)
+        case .home:
+            return CGSize(width: 560, height: n.height + 420)
+        case .settings:
+            return CGSize(width: 820, height: n.height + 560)
         case .conversation(let c):
             let shown = c.messages.suffix(3)
             let textHeight = shown.reduce(CGFloat(0)) { $0 + 30 + CGFloat(min(6, $1.text.count / 48)) * 17 }
             let chips: CGFloat = c.chips.isEmpty ? 0 : 36
-            return CGSize(width: 520, height: n.height + 24 + max(40, textHeight) + chips + 62)
+            return CGSize(width: 520, height: n.height + 24 + 34 + max(40, textHeight) + chips + 62)
         }
     }
 
@@ -113,6 +136,7 @@ final class NotchViewModel: ObservableObject {
     func set(_ newState: NotchState, autoDismissAfter seconds: TimeInterval? = nil) {
         dismissTask?.cancel()
         generation += 1
+        if case .conversation(let c) = newState { lastThread = c }
         state = newState
         Log.hud.debug("state -> \(String(describing: newState), privacy: .public)")
         guard let seconds else { return }

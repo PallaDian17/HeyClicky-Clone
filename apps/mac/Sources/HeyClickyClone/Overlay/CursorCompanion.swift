@@ -87,7 +87,7 @@ final class CursorCompanionManager {
             case "Speaking…": model.state = .speaking("")
             default: model.state = Self.mode == .always ? .idle : .hidden
             }
-        case .idle, .prompt, .suggestions:
+        case .idle, .prompt, .suggestions, .home, .settings:
             model.state = Self.mode == .always ? .idle : .hidden
         }
         model.state == .hidden ? stopFollowing() : startFollowing()

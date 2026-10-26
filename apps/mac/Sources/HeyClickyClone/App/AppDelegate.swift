@@ -52,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         statusBar = StatusBarController(actions: self)
+        notch.model.app = self
         notch.show()
         wireNotch()
         cursor.bind(to: notch.model)
@@ -535,6 +536,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "agent": notch.model.set(.agent(name: text ?? "Stripe Radar", step: "Reading last week's refunds"))
         case "notice": notch.model.set(.notice(text ?? "Update installed. Clicky restarted."), autoDismissAfter: 5)
         case "dictating": notch.model.set(.dictating(text ?? ""))
+        case "home": notch.model.set(.home)
+        case "settings": notch.model.set(.settings)
         case "conversation":
             var c = ConversationModel()
             c.messages = [.init(role: .assistant, text: "What would you like me to do with the highlighted section on the left? I can explain what it is, or point out specific controls if you want.")]
@@ -573,6 +576,10 @@ extension AppDelegate: StatusBarActions {
     func showPermissions() {
         if permissionsWindow == nil { permissionsWindow = PermissionsWindowController(model: permissions) }
         permissionsWindow?.show()
+    }
+
+    func toggleNotchHome() {
+        if case .home = notch.model.state { notch.model.collapse() } else { notch.model.set(.home) }
     }
 
     func showOnboarding() { showOnboarding(step: nil) }

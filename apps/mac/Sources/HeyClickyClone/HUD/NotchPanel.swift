@@ -88,7 +88,7 @@ final class NotchWindowManager {
             panel.setFrame(target, display: true)
         }
 
-        let isPrompt = model.state == .prompt
+        let isPrompt = model.wantsKeyboard
         if isPrompt {
             panel.makeKey()
         } else if wasPrompt {
