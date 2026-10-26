@@ -226,7 +226,7 @@ struct SettingsPanelView: View {
     static let sections: [(String, String)] = [
         ("Backend", "server.rack"), ("Talk", "waveform"), ("Permissions", "hand.raised"), ("Character", "face.smiling"),
         ("Dictation", "text.cursor"), ("Routines", "clock.arrow.2.circlepath"), ("Integrations", "link"),
-        ("Computer use", "cursorarrow.click"), ("Privacy guard", "lock.shield"), ("Updates", "arrow.down.circle"), ("Developer", "hammer"),
+        ("Computer use", "cursorarrow.click"), ("Privacy guard", "lock.shield"), ("Memory", "brain"), ("Updates", "arrow.down.circle"), ("Developer", "hammer"),
     ]
 
     var body: some View {

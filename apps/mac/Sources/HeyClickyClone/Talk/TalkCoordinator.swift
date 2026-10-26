@@ -45,6 +45,10 @@ final class TalkCoordinator {
     var onWalkthrough: ((String) -> Void)?
     /// Gets every transcript / typed question first; returns true when it consumed it (a running walkthrough).
     var transcriptHook: ((String) -> Bool)?
+    /// Memory of the user, injected into the chat and the voice session.
+    var memory: (() -> String?)?
+    /// A finished talk exchange, for learning.
+    var onExchange: ((_ user: String, _ assistant: String) -> Void)?
 
     init(notch: NotchViewModel, backend: BackendClient, overlay: PointingOverlayManager, privacy: PrivacyMonitor) {
         self.notch = notch
@@ -216,7 +220,8 @@ final class TalkCoordinator {
             history: Array(history.suffix(8)),
             screenWithheld: context.withheld?.label,
             region: box.map { .init(x: $0.minX, y: $0.minY, w: $0.width, h: $0.height) },
-            regionCrop: crop?.jpegBase64
+            regionCrop: crop?.jpegBase64,
+            memory: memory?()
         )
         do {
             let reply = try await backend.chat(request)
@@ -224,6 +229,7 @@ final class TalkCoordinator {
             let replyText = PrivacyGuard.redact(reply.text).text
             if !transcript.isEmpty { history.append(.init(role: "user", text: transcript)) }
             history.append(.init(role: "assistant", text: replyText))
+            if !transcript.isEmpty, reply.clarify != true { onExchange?(transcript, replyText) }
 
             if let handoff = reply.handoff, let onHandoff, reply.clarify != true {
                 let task = PrivacyGuard.redact(handoff.task).text
@@ -413,7 +419,7 @@ final class TalkCoordinator {
 
     private func ensureVoice() async throws {
         if voice.isUsable { return }
-        let grant = try await backend.mintRealtimeSession(voice: OnboardingModel.selectedVoice, language: OnboardingModel.selectedLanguage)
+        let grant = try await backend.mintRealtimeSession(voice: OnboardingModel.selectedVoice, language: OnboardingModel.selectedLanguage, memory: memory?())
         voice.language = OnboardingModel.languageName(OnboardingModel.selectedLanguage)
         try await voice.connect(grant: grant)
     }

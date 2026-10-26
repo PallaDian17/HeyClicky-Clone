@@ -14,7 +14,12 @@ final class BackendClient {
         /// Circle-to-ask: the circled part of the screenshot (0..1, top-left origin) and its enlarged crop.
         var region: RegionBox?
         var regionCrop: String?
+        /// The app's notes about the user (PROFILE.md + VOLATILE.md).
+        var memory: String?
     }
+    struct MemoryExchange: Encodable { var source: String; var user: String; var assistant: String }
+    struct MemoryExtractRequest: Encodable { var profile: String; var volatile: String; var exchanges: [MemoryExchange] }
+    struct MemoryExtractResponse: Decodable { var profile: String; var volatile: String; var changed: Bool }
     struct RegionBox: Encodable { var x: Double; var y: Double; var w: Double; var h: Double }
     struct HistoryTurn: Codable { var role: String; var text: String }
     struct Box: Decodable { var x: Double; var y: Double; var w: Double; var h: Double }
@@ -88,10 +93,14 @@ final class BackendClient {
         try await post("v1/walkthrough/step", body: request)
     }
 
-    private struct VoiceBody: Encodable { var voice: String; var language: String }
+    private struct VoiceBody: Encodable { var voice: String; var language: String; var memory: String? }
 
-    func mintRealtimeSession(voice: String, language: String) async throws -> RealtimeGrant {
-        try await post("v1/realtime/session", body: VoiceBody(voice: voice, language: language))
+    func mintRealtimeSession(voice: String, language: String, memory: String? = nil) async throws -> RealtimeGrant {
+        try await post("v1/realtime/session", body: VoiceBody(voice: voice, language: language, memory: memory))
+    }
+
+    func memoryExtract(_ request: MemoryExtractRequest) async throws -> MemoryExtractResponse {
+        try await post("v1/memory/extract", body: request)
     }
 
     private struct PreviewBody: Encodable { var voice: String }

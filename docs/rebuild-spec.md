@@ -264,6 +264,35 @@ click-to-advance. `Talk/WalkthroughCoordinator.swift`,
   click → "Click Save", each ringed on screen and advanced by the click.
   One step request retries once (the model endpoint 503'd on the first try).
 
+### 3.15 Memory of you — built 2026-10-27
+Website gap #3 (`docs/website-gap-analysis.md`). `Memory/MemoryStore.swift`,
+`apps/backend/src/routes/memory.ts`.
+- **Two notes on disk**, App Support/`memory/PROFILE.md` (durable: name, what
+  they do, tools, how they like answers, standing instructions; ≤15 lines) and
+  `VOLATILE.md` (what they are working on right now; ≤8 lines). Shown and
+  editable in Setup → Memory (Edit / Save, Learn now, Forget everything, on/off
+  toggle `ClickyMemoryEnabled`).
+- **Learning** is batched: every finished talk exchange (user + reply, not the
+  clarify step) and every finished Clicky turn (last user message + result,
+  not routines) is redacted and queued; 20 s after the last one, up to 12 go to
+  `POST /v1/memory/extract`, which rewrites both notes (merge, no duplicates,
+  drop stale) and says whether anything changed. The prompt refuses passwords,
+  codes, OTPs, card/account numbers, keys, addresses, phone numbers and
+  health/financial specifics — a decoy OTP in the first test was dropped.
+- **Injection**: `MemoryStore.promptBlock` (redacted again on the way out)
+  goes into the chat request (`memory` field → system prompt via
+  `memoryBlock()`), the Realtime session instructions at mint time (so a
+  running voice session picks up changes on its next connect), and every
+  Clicky turn. **Caveat found here**: Claude Code ignores
+  `--append-system-prompt` on `--resume` (a session keeps the system prompt it
+  was born with; verified with a marker: resumed → "Unknown", fresh →
+  "Pineapple"), so for a resumed session the block also rides inside the
+  turn's prompt in an `<app-context>` block. The same limitation means the
+  computer-use / integrations lines of the preamble are frozen for an existing
+  session — a "New conversation" picks up the current ones.
+- Debug: `memory/show`, `memory/learn?text=&reply=`, `memory/flush`,
+  `memory/forget`.
+
 ### 3.2 Talk mode
 - Trigger: global modifier double-tap (default: double-tap Control) or hold
   Fn; configurable with a shortcut recorder. Needs a CGEvent tap and

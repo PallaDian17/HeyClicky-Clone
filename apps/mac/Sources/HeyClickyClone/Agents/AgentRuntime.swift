@@ -35,6 +35,9 @@ final class AgentRuntime: ObservableObject {
     var integrations: IntegrationsHost?
     /// Set by the app: true when the Home window is the active window (then no notification is needed).
     var isHomeInFront: (() -> Bool)?
+    /// Memory of the user for the turn preamble, and the hook that learns from a finished turn.
+    var memoryBlock: (() -> String?)?
+    var onExchange: ((_ agent: Agent, _ user: String, _ assistant: String) -> Void)?
     private var toolEntries: [String: UUID] = [:]          // tool_use id -> transcript entry
     private var streamingEntry: [UUID: UUID] = [:]         // agent -> streaming assistant entry
     private var routineTurns: [UUID: UUID] = [:]           // agent -> routine driving the current turn
@@ -146,11 +149,18 @@ final class AgentRuntime: ObservableObject {
             sessionID: agent.sessionID,
             newSessionID: UUID().uuidString.lowercased(),
             model: modelChoice,
-            appendSystemPrompt: Self.turnPreamble(for: agent, computerUse: computerUseOn, routine: routine, integrations: turn),
+            appendSystemPrompt: Self.turnPreamble(for: agent, computerUse: computerUseOn, routine: routine, integrations: turn, memory: memoryBlock?()),
             mcpConfigJSON: ComputerUseHost.mcpConfigJSON(servers: servers)
         )
+        // Claude Code ignores --append-system-prompt on a resumed session (the
+        // session keeps the system prompt it was born with), so anything that
+        // must be current on EVERY turn rides along in the prompt itself.
+        var prompt = text
+        if agent.sessionID != nil, let memory = memoryBlock?(), !memory.isEmpty {
+            prompt += "\n\n<app-context>\nFrom the app, not the user. What the app knows about the user from earlier conversations (use it to fit their habits and the work in progress; it may be out of date; never recite it unless asked):\n\(memory)\n</app-context>"
+        }
         do {
-            try runner.start(prompt: text, options: options) { [weak self] event in
+            try runner.start(prompt: prompt, options: options) { [weak self] event in
                 self?.handle(event, agentID: agentID)
             }
         } catch {
@@ -218,7 +228,7 @@ final class AgentRuntime: ObservableObject {
     }
 
     /// Standing rules every turn carries, on top of the persona in the folder's CLAUDE.md.
-    private static func turnPreamble(for agent: Agent, computerUse: Bool, routine: Routine? = nil, integrations: IntegrationsHost.TurnServers = .init()) -> String {
+    private static func turnPreamble(for agent: Agent, computerUse: Bool, routine: Routine? = nil, integrations: IntegrationsHost.TurnServers = .init(), memory: String? = nil) -> String {
         var text = """
         You are \(agent.name), a helper running inside Hi Dicky on this person's Mac. Your working directory is your own folder; its CLAUDE.md holds your persona and dated notes. Keep finished work in output/ and scratch in tmp/. You cannot ask the user questions mid-turn, so make reasonable choices and say what you assumed. Your final message is shown in a small card and may be read aloud: lead with the result in plain words, keep it short, and say what did not work.
 
@@ -246,6 +256,9 @@ final class AgentRuntime: ObservableObject {
             text += "\n\nNo online accounts are connected; if a task needs Gmail, Notion or another service, say so and tell the user they can connect it in Setup → Integrations."
         } else {
             text += "\n\nConnected integrations, available as MCP tools (mcp__<server>__<tool>): " + integrations.summary.joined(separator: "; ") + ". Use them directly for anything in those services. Tools that send, reply, delete, pay or publish are blocked unless the user allowed them for that server; when one is blocked, prepare everything else and tell the user what you would have sent or removed."
+        }
+        if let memory, !memory.isEmpty {
+            text += "\n\nWhat the app knows about the user from earlier conversations (use it to fit their habits and the work in progress; it may be out of date; never recite it unless asked):\n" + memory
         }
         return text
     }
@@ -336,6 +349,7 @@ final class AgentRuntime: ObservableObject {
         store.saveTranscript(t, for: updated)
 
         let summary = finalText.isEmpty ? (lastAssistant ?? "Done.") : finalText
+        if !isError, routineID == nil, let userText = t.last(where: { $0.role == .user })?.text { onExchange?(agent, userText, summary) }
         setActivity(agentID, isError ? "Hit a problem; see Home." : String(summary.prefix(140)), clearAfter: 25)
         Self.play(isError ? "Funk" : "Glass")
         if routineID == nil || !summary.lowercased().hasPrefix("nothing new") { notify(agent: agent, body: summary, isError: isError) }

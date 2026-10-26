@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var agents = AgentRuntime(store: AgentStore(), computerUse: computerUse, privacy: privacy, notch: notch.model, model: config.agentModel)
     private(set) lazy var dictation = DictationController(notch: notch.model, backend: backend, privacy: privacy)
     private(set) lazy var clickyTalk = ClickyPushToTalk(notch: notch.model, runtime: agents)
+    private(set) lazy var memory = MemoryStore(backend: backend)
     private(set) lazy var walkthrough = WalkthroughCoordinator(notch: notch.model, backend: backend, overlay: overlay, privacy: privacy)
     private(set) lazy var siteAwareness = SiteAwarenessMonitor(notch: notch.model, privacy: privacy, integrations: integrations, runtime: agents)
     private(set) lazy var integrations = IntegrationsHost(backend: backend)
@@ -69,6 +70,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         siteAwareness.start()
+        talk.memory = { [weak self] in self?.memory.promptBlock }
+        talk.onExchange = { [weak self] user, assistant in self?.memory.record(source: "talk", user: user, assistant: assistant) }
+        agents.memoryBlock = { [weak self] in self?.memory.promptBlock }
+        agents.onExchange = { [weak self] agent, user, assistant in self?.memory.record(source: "clicky:\(agent.name)", user: user, assistant: assistant) }
         walkthrough.speak = { [weak self] text in self?.talk.say(text) }
         talk.onWalkthrough = { [weak self] goal in self?.walkthrough.start(goal: goal) }
         talk.transcriptHook = { [weak self] text in self?.walkthrough.handle(transcript: text) ?? false }
@@ -270,6 +275,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case "partial": notch.model.openClicky(id); notch.model.pushToTalk = .init(agentID: id, text: text)
             default: notch.model.openClicky(id); clickyTalk.deliverSynthetic(text, to: id)
             }
+        case "memory":
+            // `memory/show` logs both notes · `memory/learn?text=…&reply=…` queues an exchange and learns now · `memory/flush` · `memory/forget`
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            switch url.lastPathComponent {
+            case "learn":
+                memory.record(source: "talk", user: items.first(where: { $0.name == "text" })?.value ?? "My name is Ashish.", assistant: items.first(where: { $0.name == "reply" })?.value ?? "Nice to meet you.")
+                memory.learnNow()
+            case "flush": memory.learnNow()
+            case "forget": memory.forget()
+            default: break
+            }
+            Log.app.info("memory profile:\n\(self.memory.profile, privacy: .public)\nvolatile:\n\(self.memory.volatile, privacy: .public)")
         case "walk":
             // `walk/start?goal=…` · `walk/next` · `walk/click` (pretend the target was clicked) · `walk/say?text=…` · `walk/stop`
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []

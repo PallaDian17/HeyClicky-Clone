@@ -16,6 +16,12 @@ Rules:
 export const REALTIME_INSTRUCTIONS = (language: string) =>
   `You are the voice of Clicky, a helpful Mac assistant. You always speak ${LANGUAGE_NAMES[language] ?? "English"}, whatever language you hear or read; never translate into another language and never switch. When asked to read a text aloud, read it exactly as written, warmly and briskly, and add nothing.`;
 
+/** Appended to a system prompt when the app has notes about the user. */
+export const memoryBlock = (memory: string | undefined) =>
+  memory && memory.trim()
+    ? `\n\nWhat you know about this user from earlier conversations (use it to tailor what you say and how; never recite it unless asked; it may be out of date):\n${memory.trim()}`
+    : "";
+
 export const LANGUAGE_NAMES: Record<string, string> = {
   en: "English", es: "Spanish", fr: "French", de: "German", it: "Italian", pt: "Portuguese", hi: "Hindi", ja: "Japanese", ko: "Korean", zh: "Chinese",
 };

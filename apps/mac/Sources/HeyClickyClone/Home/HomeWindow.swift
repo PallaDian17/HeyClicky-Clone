@@ -41,6 +41,10 @@ struct HomeView: View {
     @ObservedObject private var characters: CharacterStore
     @ObservedObject private var updates: UpdateController
     @ObservedObject private var backend: BackendSupervisor
+    @ObservedObject private var memory: MemoryStore
+    @State private var memoryProfileDraft = ""
+    @State private var memoryVolatileDraft = ""
+    @State private var memoryEditing = false
     @State private var newWord = ""
     @AppStorage(AgentRuntime.modelKey) private var agentModel = ""
     @AppStorage(AgentRuntime.soundsKey) private var soundsOn = true
@@ -60,6 +64,7 @@ struct HomeView: View {
         _permissions = ObservedObject(wrappedValue: app.permissions)
         _notch = ObservedObject(wrappedValue: app.notch.model)
         _computerUse = ObservedObject(wrappedValue: app.computerUse)
+        _memory = ObservedObject(wrappedValue: app.memory)
         _privacy = ObservedObject(wrappedValue: app.privacy)
         _routines = ObservedObject(wrappedValue: app.routines)
         _dictionary = ObservedObject(wrappedValue: app.dictation.dictionary)
@@ -250,6 +255,44 @@ struct HomeView: View {
                     .labelsHidden().frame(width: 260)
                     Text("Used by on-device speech; Deepgram detects language itself.").font(.caption).foregroundStyle(.secondary)
                 }
+            }
+
+            section("Memory") {
+                Toggle("Remember things about me", isOn: Binding(get: { MemoryStore.isEnabled }, set: { MemoryStore.isEnabled = $0 }))
+                    .font(.callout)
+                Text("Two short notes learned from what you say to Dicky and your Clickys: who you are and how you like things (PROFILE.md), and what you're working on right now (VOLATILE.md). Both go into every talk and every Clicky's turn. Never passwords, codes or account numbers.")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    if memory.learning { ProgressView().controlSize(.small); Text("Learning…").font(.caption) }
+                    else if let at = memory.lastLearned { Text("Last learned \(at.formatted(date: .abbreviated, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
+                    else { Text("Nothing learned yet.").font(.caption).foregroundStyle(.secondary) }
+                    if let err = memory.lastError { Text(err).font(.caption).foregroundStyle(.red).lineLimit(1) }
+                    Spacer()
+                    Button(memoryEditing ? "Save" : "Edit") {
+                        if memoryEditing { memory.save(profile: memoryProfileDraft, volatile: memoryVolatileDraft) }
+                        else { memoryProfileDraft = memory.profile; memoryVolatileDraft = memory.volatile }
+                        memoryEditing.toggle()
+                    }
+                    .controlSize(.small)
+                    Button("Learn now") { memory.learnNow() }.controlSize(.small)
+                    Button("Forget everything") { memory.forget(); memoryEditing = false }.controlSize(.small)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("PROFILE.md").font(.caption.weight(.semibold))
+                    if memoryEditing {
+                        TextEditor(text: $memoryProfileDraft).font(.system(size: 12, design: .monospaced)).frame(height: 110)
+                    } else {
+                        Text(memory.profile.isEmpty ? "—" : memory.profile).font(.system(size: 12, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    Text("VOLATILE.md").font(.caption.weight(.semibold)).padding(.top, 4)
+                    if memoryEditing {
+                        TextEditor(text: $memoryVolatileDraft).font(.system(size: 12, design: .monospaced)).frame(height: 80)
+                    } else {
+                        Text(memory.volatile.isEmpty ? "—" : memory.volatile).font(.system(size: 12, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
             }
 
             section("Developer") {

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { chatJSON, OpenAIError, type ChatMessage } from "../openai.js";
-import { TALK_SYSTEM_PROMPT } from "../prompt.js";
+import { TALK_SYSTEM_PROMPT, memoryBlock } from "../prompt.js";
 import type { AuthedUser } from "../auth.js";
 
 const Element = z.object({
@@ -27,6 +27,8 @@ export const ChatRequest = z.object({
   /** Circle-to-ask: the part of the screenshot the user circled (0..1, top-left origin) and that part enlarged. */
   region: z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().min(0).max(1), h: z.number().min(0).max(1) }).optional(),
   regionCrop: z.string().max(4_000_000).optional(),
+  /** The app's notes about the user (PROFILE.md + VOLATILE.md), already redacted. */
+  memory: z.string().max(4000).optional(),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
 
@@ -112,7 +114,7 @@ function describeElements(req: ChatRequest): string {
 }
 
 export function buildMessages(req: ChatRequest): ChatMessage[] {
-  const messages: ChatMessage[] = [{ role: "system", content: TALK_SYSTEM_PROMPT }];
+  const messages: ChatMessage[] = [{ role: "system", content: TALK_SYSTEM_PROMPT + memoryBlock(req.memory) }];
   for (const h of req.history) {
     messages.push(h.role === "user" ? { role: "user", content: [{ type: "text", text: h.text }] } : { role: "assistant", content: h.text });
   }
@@ -162,7 +164,7 @@ chatRoute.post("/", async (c) => {
     const follow_ups = (value.follow_ups ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 2);
     const clarify = Boolean(value.clarify);
     const walkthrough = value.walkthrough && value.walkthrough.goal.trim() && !clarify ? { goal: value.walkthrough.goal.trim() } : null;
-    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} region=${req.region ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} target=${element_id ?? (box ? "box" : "none")} targets=${targets.length} followups=${follow_ups.length} clarify=${clarify} handoff=${handoff ? "yes" : "no"} walkthrough=${walkthrough ? "yes" : "no"}`);
+    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} region=${req.region ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} memory=${req.memory ? "yes" : "no"} target=${element_id ?? (box ? "box" : "none")} targets=${targets.length} followups=${follow_ups.length} clarify=${clarify} handoff=${handoff ? "yes" : "no"} walkthrough=${walkthrough ? "yes" : "no"}`);
     return c.json({ text: value.text, element_id, box, handoff, targets, follow_ups, clarify, walkthrough, usage });
   } catch (err) {
     const status = err instanceof OpenAIError ? 502 : 500;
