@@ -294,8 +294,8 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 16) {
                 title("Three gestures", "That's all there is to learn.")
                 let steps: [(String, String, String, NotchState)] = [
-                    ("⌃ ⌃", "Double-tap Control", "opens a prompt box in the notch. Type a question about what's on screen.", .prompt),
-                    ("⌃ hold", "Double-tap and hold Control", "to talk. Release and I answer out loud and can point at things.", .listening),
+                    ("⌃ ⌥", "Hold Control + Option", "to talk. Lasso anything on screen while holding; release and I answer out loud and mark what I mean.", .listening),
+                    ("⌃ ⌃", "Double-tap Control", "opens a prompt box in the notch for a typed question.", .prompt),
                     ("⌥ hold", "Hold Option", "to dictate into whatever field is focused. Release to paste the cleaned-up text.", .dictating("hello comma this is dictation")),
                 ]
                 ForEach(Array(steps.enumerated()), id: \.offset) { i, s in

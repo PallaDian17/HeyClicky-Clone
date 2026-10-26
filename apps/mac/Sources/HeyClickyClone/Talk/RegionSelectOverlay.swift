@@ -18,6 +18,10 @@ final class RegionSelectOverlayManager {
 
     var onAction: ((Action, CGRect) -> Void)?
     var onDismiss: (() -> Void)?
+    /// Silent mode (the recorded behaviour): a stroke just records the selection and stays
+    /// drawn; no action bar. `onSelected` fires with the normalized box.
+    var silent = true
+    var onSelected: ((CGRect) -> Void)?
     /// Supplies the Clickys for the "Hand to" menu.
     var agentsProvider: () -> [(id: UUID, name: String)] = { [] }
 
@@ -41,6 +45,11 @@ final class RegionSelectOverlayManager {
     func disarmIfIdle() {
         guard !hasSelection else { return }
         dismiss(notify: false)
+    }
+
+    /// Stops taking the mouse but leaves the drawing visible (silent mode, after the key came up).
+    func stopCapturing() {
+        panel?.ignoresMouseEvents = true
     }
 
     func dismiss(notify: Bool = true) {
@@ -91,6 +100,13 @@ final class RegionSelectOverlayManager {
         let size = canvas.bounds.size
         selection = CGRect(x: rect.minX / size.width, y: 1 - rect.maxY / size.height,
                            width: rect.width / size.width, height: rect.height / size.height)
+        if silent {
+            // Keep the lasso on screen for the answer; the pointer goes back to the app underneath.
+            panel?.ignoresMouseEvents = true
+            onSelected?(selection!)
+            Log.hud.info("region selected (silent) \(NSStringFromRect(self.selection ?? .zero), privacy: .public)")
+            return
+        }
         bar.rootView = RegionActionBar(manager: self)
         let barSize = bar.fittingSize
         var origin = CGPoint(x: rect.maxX - barSize.width, y: rect.minY - barSize.height - 10)
@@ -125,6 +141,8 @@ final class RegionPanel: NSPanel {
 final class RegionCanvasView: NSView {
     var onSelection: ((CGRect) -> Void)?
     var onEscape: (() -> Void)?
+    /// Dim + dashed frame (bar mode). Silent mode shows only the lasso, as recorded.
+    var showsSelectionFrame = false
     private(set) var isDragging = false
     private var points: [CGPoint] = []
     private let stroke = CAShapeLayer()
@@ -139,13 +157,13 @@ final class RegionCanvasView: NSView {
         dim.fillColor = NSColor.black.withAlphaComponent(0.18).cgColor
         dim.isHidden = true
         stroke.fillColor = nil
-        stroke.strokeColor = NSColor.systemPurple.cgColor
-        stroke.lineWidth = 4
+        stroke.strokeColor = NSColor(calibratedRed: 0.36, green: 0.56, blue: 1.0, alpha: 0.75).cgColor
+        stroke.lineWidth = 5
         stroke.lineCap = .round
         stroke.lineJoin = .round
-        stroke.shadowColor = NSColor.systemPurple.cgColor
-        stroke.shadowOpacity = 0.7
-        stroke.shadowRadius = 6
+        stroke.shadowColor = NSColor.systemBlue.cgColor
+        stroke.shadowOpacity = 0.45
+        stroke.shadowRadius = 8
         box.fillColor = nil
         box.strokeColor = NSColor.white.withAlphaComponent(0.9).cgColor
         box.lineWidth = 1.5
@@ -190,13 +208,15 @@ final class RegionCanvasView: NSView {
         var rect = points.reduce(CGRect.null) { $0.union(CGRect(origin: $1, size: .zero)) }
         guard rect.width > 14 || rect.height > 14 else { reset(); return }
         rect = rect.insetBy(dx: -8, dy: -8).intersection(bounds)
-        let path = CGMutablePath()
-        path.addRect(bounds)
-        path.addRoundedRect(in: rect, cornerWidth: 10, cornerHeight: 10)
-        dim.path = path
-        dim.isHidden = false
-        box.path = CGPath(roundedRect: rect, cornerWidth: 10, cornerHeight: 10, transform: nil)
-        box.isHidden = false
+        if showsSelectionFrame {
+            let path = CGMutablePath()
+            path.addRect(bounds)
+            path.addRoundedRect(in: rect, cornerWidth: 10, cornerHeight: 10)
+            dim.path = path
+            dim.isHidden = false
+            box.path = CGPath(roundedRect: rect, cornerWidth: 10, cornerHeight: 10, transform: nil)
+            box.isHidden = false
+        }
         onSelection?(rect)
     }
 

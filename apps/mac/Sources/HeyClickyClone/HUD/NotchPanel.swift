@@ -25,6 +25,7 @@ final class NotchWindowManager {
             backing: .buffered,
             defer: false
         )
+        panel.title = "Notch"
         panel.level = .screenSaver
         panel.isOpaque = false
         panel.backgroundColor = .clear

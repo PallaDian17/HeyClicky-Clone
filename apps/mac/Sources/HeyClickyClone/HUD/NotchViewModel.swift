@@ -12,6 +12,23 @@ enum NotchState: Equatable {
     case dictating(String)                     // live transcript while Option is held
     case dictated(String)                      // what was inserted
     case suggestions([SuggestionCardModel])    // morning cards
+    case conversation(ConversationModel)       // the talk thread (recorded layout)
+}
+
+/// The talk as a thread: assistant and user bubbles, suggestion chips, and the
+/// hold-to-talk pill + Ask field underneath.
+struct ConversationModel: Equatable {
+    struct Message: Equatable, Identifiable {
+        enum Role { case user, assistant }
+        var id = UUID()
+        var role: Role
+        var text: String
+    }
+    var messages: [Message] = []
+    var chips: [String] = []
+    var status: String?            // "Listening…", "Thinking…", "Speaking…"
+    var canClear = false           // annotations on screen
+    var hint = "Hold ⌃ Control + ⌥ Option to talk"
 }
 
 struct SuggestionCardModel: Equatable, Identifiable {
@@ -77,8 +94,18 @@ final class NotchViewModel: ObservableObject {
             return CGSize(width: 480, height: n.height + 40 + CGFloat(lines) * 18)
         case .suggestions(let cards):
             return CGSize(width: 520, height: n.height + 52 + CGFloat(max(1, cards.count)) * 58)
+        case .conversation(let c):
+            let shown = c.messages.suffix(3)
+            let textHeight = shown.reduce(CGFloat(0)) { $0 + 30 + CGFloat(min(6, $1.text.count / 48)) * 17 }
+            let chips: CGFloat = c.chips.isEmpty ? 0 : 36
+            return CGSize(width: 520, height: n.height + 24 + max(40, textHeight) + chips + 62)
         }
     }
+
+    /// Set by the app: a chip or the Ask field sent text; the Clear chip was pressed.
+    var onConversationSend: ((String) -> Void)?
+    var onClearAnnotations: (() -> Void)?
+    @Published var askText = ""
 
     /// Set by the app: what to do when a suggestion card is accepted or dismissed.
     var onSuggestion: ((SuggestionCardModel, Bool) -> Void)?

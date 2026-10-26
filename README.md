@@ -5,7 +5,15 @@ HUD, push-to-talk screen-aware voice chat that can draw on the screen, named
 agents that run tasks on the Mac through Claude Code and a computer-use
 driver, dictation, and scheduled routines.
 
-Status: **cursor tracker + build provenance (2026-10-23).** A blue ring now
+Status: **talk rebuilt to the recordings + the app owns its backend
+(2026-10-26).** Hold ⌃ Control + ⌥ Option, speak, lasso anything while you
+hold; the answer is read aloud, shown as a thread in the notch with follow-up
+chips, and marked on screen with numbered badges and underlines as it goes.
+A lasso with no words makes Dicky ask what you want. The backend that talk
+depends on is now started, watched and restarted by the app, with its state
+in Setup. See `docs/recording-gap-analysis.md`.
+
+Earlier: **cursor tracker + build provenance (2026-10-23).** A blue ring now
 rides beside the mouse while you talk or dictate: waveform while listening,
 spinner while thinking, the answer in a bubble next to the pointer. Setup →
 Updates shows exactly which commit the running app was built from and offers

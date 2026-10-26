@@ -130,6 +130,49 @@ Design choices that differ from or simplify the original:
   "hand this to an agent"; the capture + instruction becomes the first turn of a
   new or existing agent.
 
+### 3.2 Talk mode — rebuilt to the recordings 2026-10-26
+See `docs/recording-gap-analysis.md` for the evidence. What changed:
+- **Gesture**: hold ⌃ Control + ⌥ Option (`HotkeyMonitor.talkChord`, 0.2 s);
+  releasing either key ends the hold. Double-tap ⌃ still opens the prompt box;
+  ⌥ alone still dictates; entering the chord cancels both.
+- **Silent lasso**: while holding, a soft translucent blue stroke is drawn and
+  simply attaches to the question; no action bar. The stroke stays on screen
+  through the answer. With no words the request carries `(no words)` and the
+  model answers with `clarify=true`: "What would you like me to do with the
+  highlighted section…" plus two chips ("Explain what it is." / "Point out
+  the controls."). A recent lasso (≤90 s) is reused by chips and typed
+  follow-ups.
+- **Thread in the notch**: `NotchState.conversation(ConversationModel)` — the
+  last bubbles (user right, assistant left), a status line while thinking or
+  speaking, chips (follow-ups from the model, or the clarify options), a
+  "✕ Clear" chip while annotations are up, the blue "Hold ⌃ Control + ⌥
+  Option to talk" pill and an "Ask Dicky…" field. Collapses 25 s after the
+  voice finishes; Esc collapses and clears.
+- **Annotations**: the reply's `targets` (≤6, in speaking order; element id or
+  normalized box; kind marker / underline / box; label) are drawn by
+  `PointingOverlayManager.showTargets` as numbered badges with sketched
+  underlines or rings, revealed one by one over ≈ words ÷ 2.6 s, and kept
+  until Clear, Esc or the next hold. The single `element_id`/`box` pointer
+  remains the fallback.
+- **Cursor marker** is the recorded blue triangle; the answer text no longer
+  rides with the pointer (it is in the notch).
+- Debug: `talk/chip?n=|text=`, `talk/clear`, `hud/conversation`,
+  `hud/annotations`, `hud/annotations-snapshot?text=<path>`, `backend/restart|status`.
+  Scratch tool `chord <s>` holds the real modifier chord through the HID tap.
+
+### 3.0 Backend owned by the app — 2026-10-26
+`App/BackendSupervisor.swift`: at launch the app probes `/healthz`; if
+nothing answers and the backend source sits in the repo next to the bundle,
+it starts `apps/backend` with the vendored `tsx` (no watch), logs to
+Application Support/HeyClickyClone/backend.log, confirms health, and restarts
+it with backoff (≤5 starts / 2 min) when it exits. A backend started by hand
+is detected and left alone ("Running (started outside the app)"). Health is
+re-checked every 20 s. Setup → Backend shows the state with Open log /
+Restart; talk errors now say "The backend isn't running. Setup → Backend."
+instead of a generic failure. Orphan `cua-driver serve` daemons from earlier
+app instances are killed at launch. Verified: launched with the port dead →
+started pid; killed by pid → "exited status=143; restarting" → new pid.
+
 ### 3.2a Talk language — fixed 2026-10-23
 A reply was once read aloud in Spanish: nothing pinned the language, so the
 Realtime model guessed from the room audio. Now English is pinned in three
@@ -491,6 +534,8 @@ Remaining, re-cut on 2026-10-21 for personal use and UI fidelity:
    verify with AX fallback, learned dictionary with Setup editor; routine
    registry + scheduler + agent `<ROUTINE>` tag; morning suggestions notch.
    Not yet exercised with a real microphone (permission not granted).
+   Talk mode and the backend were rebuilt to the recordings on 2026-10-26
+   (§3.0, §3.2).
 7. **Integrations — done 2026-10-21:** Composio session MCP (gated on a
    key that is not configured here) plus custom OAuth/token connectors with
    discovery, registration, PKCE, refresh, a tool probe, and the per-server

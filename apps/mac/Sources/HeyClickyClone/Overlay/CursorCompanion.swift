@@ -80,6 +80,13 @@ final class CursorCompanionManager {
             model.state = Self.mode == .always ? .speaking("\(name): \(step)") : .hidden
         case .notice(let text):
             model.state = Self.mode == .always ? .speaking(text) : (model.state == .hidden ? .hidden : .speaking(text))
+        case .conversation(let c):
+            switch c.status {
+            case "Listening…": model.state = .listening(hint: nil)
+            case "Thinking…": model.state = .thinking
+            case "Speaking…": model.state = .speaking("")
+            default: model.state = Self.mode == .always ? .idle : .hidden
+            }
         case .idle, .prompt, .suggestions:
             model.state = Self.mode == .always ? .idle : .hidden
         }
@@ -163,46 +170,36 @@ struct CursorCompanionView: View {
         case .hidden:
             EmptyView()
         case .idle:
-            Circle().stroke(Color(nsColor: .systemBlue), lineWidth: 2.5).frame(width: 14, height: 14)
-                .shadow(color: Color(nsColor: .systemBlue).opacity(0.7), radius: 5)
+            Triangle().fill(Color(nsColor: .systemBlue)).frame(width: 14, height: 14)
+                .shadow(color: Color(nsColor: .systemBlue).opacity(0.6), radius: 3)
         case .listening:
-            ZStack {
-                Circle().fill(Color(nsColor: .systemBlue).opacity(0.25))
-                Circle().stroke(Color(nsColor: .systemBlue), lineWidth: 2.5)
-                WaveformBars().scaleEffect(0.55)
+            TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+                let pulse = 0.5 + 0.5 * sin(context.date.timeIntervalSinceReferenceDate * 5)
+                Triangle().fill(Color(nsColor: .systemBlue)).frame(width: 16, height: 16)
+                    .scaleEffect(1 + 0.18 * pulse)
+                    .shadow(color: Color(nsColor: .systemBlue).opacity(0.6 + 0.3 * pulse), radius: 5)
             }
-            .shadow(color: Color(nsColor: .systemBlue).opacity(0.8), radius: 7)
         case .thinking:
-            ZStack {
-                Circle().stroke(Color(nsColor: .systemBlue).opacity(0.3), lineWidth: 2.5)
-                TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
-                    let angle = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.2) / 1.2 * 360
-                    Circle().trim(from: 0, to: 0.3).stroke(Color(nsColor: .systemBlue), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                        .rotationEffect(.degrees(angle))
-                }
+            TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                Triangle().fill(Color(nsColor: .systemBlue).opacity(0.55 + 0.45 * (0.5 + 0.5 * sin(t * 6)))).frame(width: 16, height: 16)
+                    .shadow(color: Color(nsColor: .systemBlue).opacity(0.5), radius: 4)
             }
-            .shadow(color: Color(nsColor: .systemBlue).opacity(0.7), radius: 6)
         case .speaking:
-            ZStack {
-                Circle().fill(Color(nsColor: .systemBlue))
-                Image(systemName: "waveform").font(.system(size: 12, weight: .bold))
-            }
-            .shadow(color: Color(nsColor: .systemBlue).opacity(0.8), radius: 7)
+            Triangle().fill(Color(nsColor: .systemBlue)).frame(width: 16, height: 16)
+                .shadow(color: Color(nsColor: .systemBlue).opacity(0.8), radius: 5)
         case .dictating:
-            ZStack {
-                Circle().fill(Color(nsColor: .systemPurple))
-                Image(systemName: "mic.fill").font(.system(size: 12, weight: .bold))
-            }
-            .shadow(color: Color(nsColor: .systemPurple).opacity(0.8), radius: 7)
+            Triangle().fill(Color(nsColor: .systemPurple)).frame(width: 16, height: 16)
+                .shadow(color: Color(nsColor: .systemPurple).opacity(0.8), radius: 5)
         }
     }
 
     @ViewBuilder private var bubble: some View {
+        // The answer itself lives in the notch conversation; only short hints ride with the pointer.
         let text: String? = {
             switch model.state {
             case .listening(let hint): return hint
-            case .speaking(let t): return t
-            case .dictating(let t): return t.isEmpty ? "Listening…" : t
+            case .dictating(let t): return t.isEmpty ? "Listening…" : String(t.suffix(80))
             default: return nil
             }
         }()
@@ -217,5 +214,18 @@ struct CursorCompanionView: View {
                 .frame(maxWidth: 290, alignment: .leading)
                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topLeading)))
         }
+    }
+}
+
+
+/// The recorded cursor marker: a small right-pointing triangle beside the pointer.
+struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.closeSubpath()
+        return p
     }
 }

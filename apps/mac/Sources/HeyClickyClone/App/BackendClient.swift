@@ -19,11 +19,15 @@ final class BackendClient {
     struct HistoryTurn: Codable { var role: String; var text: String }
     struct Box: Decodable { var x: Double; var y: Double; var w: Double; var h: Double }
     struct Handoff: Decodable { var task: String; var agent_hint: String? }
+    struct Target: Decodable { var element_id: Int?; var box: Box?; var kind: String; var label: String? }
     struct ChatResponse: Decodable {
         var text: String
         var element_id: Int?
         var box: Box?
         var handoff: Handoff?
+        var targets: [Target]?
+        var follow_ups: [String]?
+        var clarify: Bool?
     }
     struct InterviewTurn: Codable { var role: String; var text: String }
     struct InterviewRequest: Encodable { var turns: [InterviewTurn]; var existingNames: [String] }

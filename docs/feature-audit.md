@@ -31,7 +31,7 @@ Legend: ✅ matches · 🟡 partial · ❌ not built · ⛔ excluded by decision
 
 | HeyClicky | Hi Dicky | Status | Tested |
 |---|---|---|---|
-| Push-to-talk: modifier double-tap / hold | Control double-tap = prompt, double-tap-and-hold = talk; CGEvent tap | ✅ | tap running; gesture handler covered by `talk/hold` route (real mic, Realtime session) |
+| Push-to-talk: modifier double-tap / hold | Hold Control + Option = talk (as recorded); Control double-tap = prompt; CGEvent tap | ✅ | tap running; gesture handler covered by `talk/hold` route (real mic, Realtime session) |
 | Hotkey configuration + recorder | Fixed gestures (Control / Option) | 🟡 | — |
 | Screenshot (SCK, excludes own windows) | `ScreenCapture` with SCK, own windows excluded | ✅ | screenshots reached the backend (`screenshot=yes`) |
 | Reads the whole document under view | Accessibility harvest of the frontmost window (elements, URLs, secure fields) | 🟡 | `privacy/status` shows element counts |
@@ -39,6 +39,7 @@ Legend: ✅ matches · 🟡 partial · ❌ not built · ⛔ excluded by decision
 | Blue cursor / sketch stroke pointing, `[TARGET]` | Pointing overlay from `element_id` / `box` in the chat reply | ✅ | phase 2 |
 | Blue cursor companion + cursor message bubble (follows the mouse) | Cursor tracker: ring beside the pointer with waveform / spinner / answer bubble / mic dot, mirrors the notch | ✅ | rendered in every state; window followed three pointer moves; a real hold showed the listening ring |
 | Region select during talk (drag a region, post-drag action bar, hand-off or copy) | Circle-to-ask: stroke overlay, Ask / Hand to / Copy bar, region + crop sent to the model; Ask explains what/does/how; Tell me more hands it to Scout | ✅ | synthetic circle drag during a real hold → Ask → reply + pointer; copy → PNG; hand-off → Scout |
+| Numbered markers + underlines revealed while speaking, Clear, follow-up chips, clarify step | Built 2026-10-26 (`targets`, `follow_ups`, `clarify`; notch conversation) | ✅ | lasso with no words → clarify + chips; chip → 3 annotated targets |
 | Click-to-advance turns | Not built | ❌ | — |
 | Response card with photo gallery, Place/Stock widgets, image + web search | Not built (needs `/places`, `/web-search`, image search backends) | ❌ | — |
 | Privacy of secrets on screen | Privacy guard: withholds the screen on password fields, protected apps, payment/sign-in/OTP pages; redacts codes and cards | ✅ (beyond original) | `privacy-checks` 21/21; live withheld case in phase 4b |

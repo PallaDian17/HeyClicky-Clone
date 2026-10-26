@@ -40,6 +40,7 @@ struct HomeView: View {
     @ObservedObject private var integrations: IntegrationsHost
     @ObservedObject private var characters: CharacterStore
     @ObservedObject private var updates: UpdateController
+    @ObservedObject private var backend: BackendSupervisor
     @State private var newWord = ""
     @AppStorage(AgentRuntime.modelKey) private var agentModel = ""
     @AppStorage(AgentRuntime.soundsKey) private var soundsOn = true
@@ -65,6 +66,7 @@ struct HomeView: View {
         _integrations = ObservedObject(wrappedValue: app.integrations)
         _characters = ObservedObject(wrappedValue: app.characters)
         _updates = ObservedObject(wrappedValue: app.updates)
+        _backend = ObservedObject(wrappedValue: app.backendSupervisor)
     }
 
     var body: some View {
@@ -114,6 +116,22 @@ struct HomeView: View {
                 }
             }
 
+            section("Backend") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Circle().fill(backend.state.isUp ? Color.green : Color.orange).frame(width: 8, height: 8)
+                            Text(backend.state.label).font(.callout)
+                        }
+                        Text("Talk, circle-to-ask, dictation cleanup, voice previews and suggestions go through \(app.config.backendURL.absoluteString). The app starts it from the repo next to the bundle and restarts it if it exits\(backend.restarts > 0 ? " (\(backend.restarts) so far)" : "").")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Open log") { NSWorkspace.shared.open(backend.logURL) }.controlSize(.small)
+                    Button("Restart") { backend.restart() }.controlSize(.small).disabled(!backend.canManage)
+                }
+            }
+
             section("Talk") {
                 HStack(spacing: 8) {
                     Text("Language").font(.caption)
@@ -137,7 +155,7 @@ struct HomeView: View {
             section("Hotkey") {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text("Double-tap ⌃ Control to open the prompt box. Double-tap and hold to talk.")
+                        Text("Hold ⌃ Control + ⌥ Option to talk (lasso anything while holding). Double-tap ⌃ Control for the prompt box. Hold ⌥ Option alone to dictate.")
                         Spacer()
                         let ready = app.hotkey.isRunning && permissions.status(.accessibility) == .granted
                         Circle()

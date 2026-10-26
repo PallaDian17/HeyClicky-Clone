@@ -30,12 +30,25 @@ export const ChatRequest = z.object({
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
 
+export type Target = {
+  element_id: number | null;
+  box: { x: number; y: number; w: number; h: number } | null;
+  kind: "marker" | "underline" | "box";
+  label: string | null;
+};
+
 export type ChatResponse = {
   text: string;
   element_id: number | null;
   box: { x: number; y: number; w: number; h: number } | null;
   /** Set when the user asked for work to be done rather than explained. */
   handoff: { task: string; agent_hint: string | null } | null;
+  /** Things to annotate on screen, in speaking order (numbered 1..n). */
+  targets: Target[];
+  /** Two short next questions the user might ask. */
+  follow_ups: string[];
+  /** True when the assistant is asking what to do rather than answering (e.g. a circled region with no words). */
+  clarify: boolean;
 };
 
 const responseSchema = {
@@ -56,8 +69,29 @@ const responseSchema = {
       properties: { task: { type: "string" }, agent_hint: { type: ["string", "null"] } },
       required: ["task", "agent_hint"],
     },
+    targets: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          element_id: { type: ["integer", "null"] },
+          box: {
+            type: ["object", "null"],
+            additionalProperties: false,
+            properties: { x: { type: "number" }, y: { type: "number" }, w: { type: "number" }, h: { type: "number" } },
+            required: ["x", "y", "w", "h"],
+          },
+          kind: { type: "string", enum: ["marker", "underline", "box"] },
+          label: { type: ["string", "null"] },
+        },
+        required: ["element_id", "box", "kind", "label"],
+      },
+    },
+    follow_ups: { type: "array", items: { type: "string" } },
+    clarify: { type: "boolean" },
   },
-  required: ["text", "element_id", "box", "handoff"],
+  required: ["text", "element_id", "box", "handoff", "targets", "follow_ups", "clarify"],
 };
 
 function describeElements(req: ChatRequest): string {
@@ -90,7 +124,7 @@ export function buildMessages(req: ChatRequest): ChatMessage[] {
     const r = req.region;
     parts.push({
       type: "text",
-      text: `The user circled part of the screen: the box at x=${r.x.toFixed(3)} y=${r.y.toFixed(3)} w=${r.w.toFixed(3)} h=${r.h.toFixed(3)} of the screenshot (0..1, top-left origin). Answer about what is inside that box unless they clearly ask about something else. Any box you return must still be in full-screenshot coordinates.`,
+      text: `The user circled part of the screen: the box at x=${r.x.toFixed(3)} y=${r.y.toFixed(3)} w=${r.w.toFixed(3)} h=${r.h.toFixed(3)} of the screenshot (0..1, top-left origin). Answer about what is inside that box unless they clearly ask about something else. Any box you return must still be in full-screenshot coordinates.${req.transcript.trim() === "(no words)" ? " The user said nothing: set clarify=true and ask, in one sentence, what they would like you to do with the highlighted section (explain what it is, or point out specific controls), and put those two options in follow_ups as short imperative phrases." : ""}`,
     });
     if (req.regionCrop) parts.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${req.regionCrop}`, detail: "high" } });
   }
@@ -112,8 +146,15 @@ chatRoute.post("/", async (c) => {
     const element_id = value.element_id !== null && valid.has(value.element_id) ? value.element_id : null;
     const box = value.box && [value.box.x, value.box.y, value.box.w, value.box.h].every((n) => n >= 0 && n <= 1) ? value.box : null;
     const handoff = value.handoff && value.handoff.task.trim() ? value.handoff : null;
-    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} region=${req.region ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} target=${element_id ?? (box ? "box" : "none")} handoff=${handoff ? "yes" : "no"}`);
-    return c.json({ text: value.text, element_id, box, handoff, usage });
+    const inBounds = (b: { x: number; y: number; w: number; h: number } | null) => b && [b.x, b.y, b.w, b.h].every((n) => n >= 0 && n <= 1) ? b : null;
+    const targets = (value.targets ?? [])
+      .map((t) => ({ ...t, element_id: t.element_id !== null && valid.has(t.element_id) ? t.element_id : null, box: inBounds(t.box) }))
+      .filter((t) => t.element_id !== null || t.box !== null)
+      .slice(0, 6);
+    const follow_ups = (value.follow_ups ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 2);
+    const clarify = Boolean(value.clarify);
+    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} region=${req.region ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} target=${element_id ?? (box ? "box" : "none")} targets=${targets.length} followups=${follow_ups.length} clarify=${clarify} handoff=${handoff ? "yes" : "no"}`);
+    return c.json({ text: value.text, element_id, box, handoff, targets, follow_ups, clarify, usage });
   } catch (err) {
     const status = err instanceof OpenAIError ? 502 : 500;
     console.error("[chat] failed:", err);

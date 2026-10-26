@@ -38,6 +38,14 @@ final class HotkeyMonitor {
     private var dictationTimer: DispatchWorkItem?
     private var dictationCancelled = false
 
+    /// Talk: hold Control + Option together (the recorded gesture). Fires holdBegan
+    /// after `talkChordThreshold`; releasing either key ends it.
+    var talkChord: CGEventFlags = [.maskControl, .maskAlternate]
+    var talkChordThreshold: TimeInterval = 0.2
+    private var chordDown = false
+    private var chordHolding = false
+    private var chordTimer: DispatchWorkItem?
+
     func start() throws {
         guard !isRunning else { return }
         let mask = (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue)
@@ -87,6 +95,7 @@ final class HotkeyMonitor {
             }
         case .flagsChanged:
             let allModifiers: CGEventFlags = [.maskCommand, .maskAlternate, .maskShift, .maskControl]
+            handleChord(flags: event.flags)
             handleDictation(flags: event.flags, allModifiers: allModifiers)
             let down = event.flags.contains(modifier)
             let otherModifiers = allModifiers.subtracting(modifier)
@@ -100,10 +109,37 @@ final class HotkeyMonitor {
         }
     }
 
+    /// Control + Option held together = talk. Takes priority over the single-key gestures.
+    private func handleChord(flags: CGEventFlags) {
+        let down = flags.contains(talkChord)
+        guard down != chordDown else { return }
+        chordDown = down
+        if down {
+            // Entering the chord cancels a pending dictation or double-tap.
+            dictationTimer?.cancel(); dictationCancelled = true
+            if dictating { dictating = false; emit(.dictationEnded) }
+            pressCount = 0
+            let work = DispatchWorkItem { [weak self] in
+                guard let self, self.chordDown, !self.holding else { return }
+                self.chordHolding = true
+                self.emit(.holdBegan)
+            }
+            chordTimer = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + talkChordThreshold, execute: work)
+        } else {
+            chordTimer?.cancel()
+            chordTimer = nil
+            if chordHolding {
+                chordHolding = false
+                emit(.holdEnded)
+            }
+        }
+    }
+
     /// Hold the dictation modifier on its own: begins after the threshold, ends on release.
     private func handleDictation(flags: CGEventFlags, allModifiers: CGEventFlags) {
         let down = flags.contains(dictationModifier)
-        let others = !flags.intersection(allModifiers.subtracting(dictationModifier)).isEmpty
+        let others = !flags.intersection(allModifiers.subtracting(dictationModifier)).isEmpty || chordDown
         guard down != dictationDown else { return }
         dictationDown = down
         if down {

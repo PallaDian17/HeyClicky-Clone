@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return client
     }()
     let privacy = PrivacyMonitor()
+    private(set) lazy var backendSupervisor = BackendSupervisor(baseURL: config.backendURL)
     private(set) lazy var talk = TalkCoordinator(notch: notch.model, backend: backend, overlay: overlay, privacy: privacy)
     let computerUse = ComputerUseHost()
     private(set) lazy var agents = AgentRuntime(store: AgentStore(), computerUse: computerUse, privacy: privacy, notch: notch.model, model: config.agentModel)
@@ -59,6 +60,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         permissions.refresh()
         auth.start()
+        BackendSupervisor.reapOrphanDaemons()
+        backendSupervisor.start()
         computerUse.startIfEnabled()
         agents.store.foundStarters()
         wireHandoff()
@@ -98,6 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         hotkey.stop()
+        backendSupervisor.stop()
         scheduler.stop()
         dictation.cancel()
         agents.shutdown()
@@ -192,6 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             notch.model.toggle(.prompt)
         case .escape:
             talk.cancel()
+            overlay.clear()
             dictation.cancel()
             if agents.stopAll() { notch.model.set(.notice("Stopping…"), autoDismissAfter: 2) } else { notch.model.collapse() }
         case .dictationBegan:
@@ -225,6 +230,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             auth.handle(callbackURL: url)
         case "hud":
             handleDebugHUDURL(url)
+        case "backend":
+            // `backend/restart` · `backend/status`
+            if url.lastPathComponent == "restart" { backendSupervisor.restart() }
+            Log.app.info("backend status: \(self.backendSupervisor.state.label, privacy: .public)")
         case "cursor":
             // `cursor/demo?state=listening|thinking|speaking|dictating|idle&text=…` · `cursor/snapshot?path=` · `cursor/mode?value=talk|always|off`
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -362,6 +371,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 default: action = .ask
                 }
                 talk.debugRegion(box: box, text: items.first(where: { $0.name == "text" })?.value, action: action)
+            } else if url.lastPathComponent == "chip" {
+                // `talk/chip?n=0` presses the n-th chip of the notch conversation; `talk/chip?text=…` sends text.
+                if case .conversation(let c) = notch.model.state {
+                    if let n = Int(items.first(where: { $0.name == "n" })?.value ?? ""), c.chips.indices.contains(n) { talk.send(c.chips[n]) }
+                    else if let t = items.first(where: { $0.name == "text" })?.value { talk.send(t) }
+                }
+            } else if url.lastPathComponent == "clear" {
+                talk.clearAnnotations()
             } else if url.lastPathComponent == "more" {
                 // `talk/more` = the "Tell me more" button on the last circle-to-ask reply.
                 talk.tellMeMore()
@@ -518,6 +535,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "agent": notch.model.set(.agent(name: text ?? "Stripe Radar", step: "Reading last week's refunds"))
         case "notice": notch.model.set(.notice(text ?? "Update installed. Clicky restarted."), autoDismissAfter: 5)
         case "dictating": notch.model.set(.dictating(text ?? ""))
+        case "conversation":
+            var c = ConversationModel()
+            c.messages = [.init(role: .assistant, text: "What would you like me to do with the highlighted section on the left? I can explain what it is, or point out specific controls if you want.")]
+            c.chips = ["Explain what it is.", "Point out the controls."]
+            notch.model.set(.conversation(c))
+        case "annotations":
+            // Demo: three numbered annotations across the main screen.
+            guard let screen = NSScreen.main else { return }
+            let w = screen.frame.width, h = screen.frame.height
+            overlay.showTargets([
+                (CGRect(x: w * 0.2, y: h * 0.3, width: w * 0.3, height: 22), .marker, nil),
+                (CGRect(x: w * 0.22, y: h * 0.36, width: w * 0.4, height: 18), .underline, nil),
+                (CGRect(x: w * 0.6, y: h * 0.5, width: 120, height: 36), .box, "Deploy"),
+            ], over: 3)
+        case "annotations-snapshot":
+            overlay.snapshot(to: URL(fileURLWithPath: text ?? "/tmp/annotations.png"))
         case "dictated": notch.model.set(.dictated(text ?? "Hello, this is a dictation test."), autoDismissAfter: 5)
         case "snapshot":
             // Renders the HUD's own content to a PNG (no Screen Recording needed).

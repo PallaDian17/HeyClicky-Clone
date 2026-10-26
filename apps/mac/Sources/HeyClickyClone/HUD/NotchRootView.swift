@@ -45,7 +45,7 @@ struct NotchRootView: View {
             if model.hovering {
                 HStack(spacing: 10) {
                     ClickyCharacterView(character: model.character, mood: .awake, size: 26)
-                    Text("double-tap ⌃ to ask · hold ⌃ to talk")
+                    Text("hold ⌃⌥ to talk · double-tap ⌃ to ask")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(0.75))
                 }
@@ -157,6 +157,73 @@ struct NotchRootView: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "text.cursor").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.8)).padding(.top, 2)
                 Text(text).font(.system(size: 13)).lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.top, 8)
+            .transition(.opacity)
+        case .conversation(let c):
+            VStack(alignment: .leading, spacing: 8) {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(c.messages.suffix(6)) { m in
+                                HStack {
+                                    if m.role == .user { Spacer(minLength: 60) }
+                                    Text(m.text)
+                                        .font(.system(size: 13))
+                                        .lineSpacing(2)
+                                        .padding(.horizontal, 12).padding(.vertical, 8)
+                                        .background(RoundedRectangle(cornerRadius: 14).fill(m.role == .user ? Color(nsColor: .systemBlue).opacity(0.85) : Color.white.opacity(0.1)))
+                                        .frame(maxWidth: 400, alignment: m.role == .user ? .trailing : .leading)
+                                    if m.role == .assistant { Spacer(minLength: 60) }
+                                }
+                                .id(m.id)
+                            }
+                            if let status = c.status {
+                                HStack(spacing: 8) { ThinkingDots(); Text(status).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)) }
+                            }
+                        }
+                    }
+                    .onChange(of: c.messages.count) { _, _ in if let last = c.messages.last { proxy.scrollTo(last.id, anchor: .bottom) } }
+                }
+                if !c.chips.isEmpty || c.canClear {
+                    HStack(spacing: 6) {
+                        ForEach(c.chips, id: \.self) { chip in
+                            Button(chip) { model.onConversationSend?(chip) }
+                                .buttonStyle(.plain)
+                                .font(.system(size: 11, weight: .medium))
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .background(Capsule().fill(Color(nsColor: .systemBlue).opacity(0.75)))
+                        }
+                        if c.canClear {
+                            Button { model.onClearAnnotations?() } label: { Label("Clear", systemImage: "xmark").font(.system(size: 11, weight: .medium)) }
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .background(Capsule().fill(.white.opacity(0.14)))
+                        }
+                        Spacer()
+                    }
+                }
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "mic.fill").font(.system(size: 11, weight: .bold))
+                        Text(c.hint).font(.system(size: 12, weight: .semibold))
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .frame(maxWidth: .infinity)
+                    .background(Capsule().fill(LinearGradient(colors: [Color(nsColor: .systemBlue), Color(nsColor: .systemBlue).opacity(0.7)], startPoint: .leading, endPoint: .trailing)))
+                    TextField("Ask Dicky…", text: $model.askText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .frame(width: 170)
+                        .background(Capsule().fill(.white.opacity(0.1)))
+                        .onSubmit {
+                            let t = model.askText.trimmingCharacters(in: .whitespaces)
+                            guard !t.isEmpty else { return }
+                            model.askText = ""
+                            model.onConversationSend?(t)
+                        }
+                }
             }
             .padding(.top, 8)
             .transition(.opacity)
