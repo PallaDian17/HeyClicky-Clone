@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var agents = AgentRuntime(store: AgentStore(), computerUse: computerUse, privacy: privacy, notch: notch.model, model: config.agentModel)
     private(set) lazy var dictation = DictationController(notch: notch.model, backend: backend, privacy: privacy)
     private(set) lazy var clickyTalk = ClickyPushToTalk(notch: notch.model, runtime: agents)
+    private(set) lazy var siteAwareness = SiteAwarenessMonitor(notch: notch.model, privacy: privacy, integrations: integrations, runtime: agents)
     private(set) lazy var integrations = IntegrationsHost(backend: backend)
     let characters = CharacterStore()
     private(set) lazy var updates = UpdateController()
@@ -57,6 +58,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notch.show()
         wireNotch()
         cursor.bind(to: notch.model)
+        siteAwareness.onConnect = { [weak self] _ in
+            guard let self else { return }
+            openHome()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(name: .homeSpaceSetup, object: nil)
+                NotificationCenter.default.post(name: .setupScrollTo, object: "Integrations")
+            }
+        }
+        siteAwareness.start()
         wireHotkey()
         startHotkeyWhenPermitted()
 
@@ -244,6 +254,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             switch url.lastPathComponent {
             case "partial": notch.model.openClicky(id); notch.model.pushToTalk = .init(agentID: id, text: text)
             default: notch.model.openClicky(id); clickyTalk.deliverSynthetic(text, to: id)
+            }
+        case "site":
+            // `site/show?url=https://www.linkedin.com/feed/` forces the bar; `site/reset` forgets No / Not now.
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            switch url.lastPathComponent {
+            case "reset": siteAwareness.resetDecisions()
+            default:
+                let page = items.first(where: { $0.name == "url" })?.value ?? "https://www.linkedin.com/feed/"
+                if let host = SiteCatalog.host(of: page) { siteAwareness.consider(url: page, host: host, force: true) }
             }
         case "backend":
             // `backend/restart` · `backend/status`

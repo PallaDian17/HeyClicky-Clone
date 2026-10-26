@@ -17,6 +17,7 @@ enum NotchState: Equatable {
     case settings                              // Setup inside the panel
     case clickys                               // the menu-bar list of Clickys
     case clicky(UUID)                          // one Clicky's chat, with push-to-talk
+    case site(SiteOffer)                       // "Connect LinkedIn to Hi Dicky?" bar
 }
 
 /// The talk chord held while a Clicky's page is open: the words so far.
@@ -77,6 +78,8 @@ final class NotchViewModel: ObservableObject {
     func rememberThread(_ c: ConversationModel) { lastThread = c }
 
     @Published var pushToTalk: PushToTalkState?
+    /// Set by the site-awareness monitor: a chip, Yes, Not now or No on the site bar.
+    var onSiteAction: ((SiteOffer, SiteAwarenessMonitor.Action) -> Void)?
     /// When each Clicky's thread was last looked at, for the unread dots.
     @Published var seenAt: [UUID: Date] = [:]
     func markSeen(_ id: UUID) { seenAt[id] = Date() }
@@ -138,6 +141,8 @@ final class NotchViewModel: ObservableObject {
             return CGSize(width: 420, height: n.height + 96 + CGFloat(min(rows, 8)) * 50)
         case .clicky:
             return CGSize(width: 780, height: n.height + 480)
+        case .site(let offer):
+            return CGSize(width: 720, height: n.height + (offer.connected ? 66 : 96))
         case .conversation(let c):
             let shown = c.messages.suffix(3)
             let textHeight = shown.reduce(CGFloat(0)) { $0 + 30 + CGFloat(min(6, $1.text.count / 48)) * 17 }

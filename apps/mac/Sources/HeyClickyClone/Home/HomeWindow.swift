@@ -284,6 +284,11 @@ struct HomeView: View {
             }
 
             section("Integrations") {
+                Toggle("Offer the matching integration when a known site is open in the browser", isOn: Binding(
+                    get: { SiteAwarenessMonitor.isEnabled }, set: { SiteAwarenessMonitor.isEnabled = $0 }))
+                    .font(.callout)
+                Text("A small bar under the notch on LinkedIn, GitHub, Notion, Google Docs and the like: three things a Clicky could do there, and a Yes / Not now / No for the connector. Never on pages the privacy guard withholds.")
+                    .font(.caption).foregroundStyle(.secondary)
                 if integrations.composioConfigured {
                     Text("Online accounts through Composio. Connect one and every Clicky can use it.").font(.callout)
                     ForEach(integrations.toolkits) { toolkit in

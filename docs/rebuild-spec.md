@@ -175,6 +175,31 @@ Recording item 4 (`docs/recording-gap-analysis.md` §3). `HUD/ClickyPanel.swift`
   look without a microphone), `clicky/talk?text=&slug=` (synthetic release →
   real turn).
 
+### 3.13 Site awareness — built 2026-10-27
+Recording item 5 (`docs/recording-gap-analysis.md` §4). `Site/SiteAwareness.swift`.
+- **What it notices**: the page URL of the frontmost browser window, read over
+  accessibility (`BrowserURLProbe`: Safari's window `AXDocument`, Chromium's
+  `AXWebArea` `AXURL`; Safari, Chrome, Brave, Edge, Arc, Firefox, Vivaldi,
+  Opera). Polled every 3 s only while a browser is frontmost
+  (`SiteAwarenessMonitor`, driven by app-activation notifications); the host is
+  logged, never the full URL.
+- **When the bar shows** (`NotchState.site(SiteOffer)`, `SiteBarView`, 720 pt):
+  the host matches the catalog, the notch is idle, the host was not answered
+  "No" (persisted in `SiteOffersDeclined`), not "Not now"/"Yes" in the last 24 h,
+  not shown in the last 6 h, and the **privacy guard allows the page** — a
+  withheld URL (banking, checkout, sign-in, a protected app) never gets a bar.
+  Auto-dismisses after 25 s.
+- **What it says**: "Connect LinkedIn to Hi Dicky?" (or "Use Hi Dicky on
+  LinkedIn" when the Composio toolkit is already connected, with no Yes/No
+  row), "Use Hi Dicky to:" and the catalog's three chips, then **No · Not now ·
+  Yes**. A chip sends "<task>. The page open in <browser> is <url> (<site>)."
+  to the selected (else first) Clicky and opens its page in the panel. Yes
+  opens Setup → Integrations. The catalog (`SiteCatalog`) covers LinkedIn,
+  GitHub, Notion, Linear, Google Docs/Calendar, Gmail, Slack, YouTube, X,
+  Figma, Jira, HubSpot, Shopify and Stripe, each with a Composio toolkit slug.
+- Setup → Integrations has the on/off toggle (`SiteAwarenessEnabled`, default
+  on). Debug: `site/show?url=…` forces the bar, `site/reset` forgets answers.
+
 ### 3.2 Talk mode
 - Trigger: global modifier double-tap (default: double-tap Control) or hold
   Fn; configurable with a shortcut recorder. Needs a CGEvent tap and

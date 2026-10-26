@@ -166,6 +166,8 @@ struct NotchRootView: View {
             HomePanelView(model: model).transition(.opacity)
         case .settings:
             SettingsPanelView(model: model).transition(.opacity)
+        case .site(let offer):
+            SiteBarView(model: model, offer: offer).transition(.opacity)
         case .clickys:
             if let app = model.app { ClickyListView(model: model, runtime: app.agents, store: app.agents.store).transition(.opacity) }
         case .clicky(let id):

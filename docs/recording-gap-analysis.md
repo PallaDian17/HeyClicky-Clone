@@ -144,8 +144,13 @@ search on the left, thread with the three coloured suggestion cards and send
 arrows, the mascot over the ledge, Type… field) and, with that page open,
 the talk chord is push-to-talk straight into it — the pill shows the words
 and "Release to send", release sends the turn (`HUD/ClickyPanel.swift`,
-`Talk/ClickyPushToTalk.swift`, spec §3.3c). Item 5 (the site-awareness bar)
-remains.
+`Talk/ClickyPushToTalk.swift`, spec §3.3c). Item 5 is built as well: with a
+known site open in the frontmost browser the bar drops under the notch —
+"Connect GitHub to Hi Dicky? Use Hi Dicky to: [three chips] · No · Not now ·
+Yes"; a chip sends the task plus the page URL to a Clicky and opens its page,
+Yes goes to Setup → Integrations, and the privacy guard vetoes the bar on
+withheld pages (`Site/SiteAwareness.swift`, spec §3.13). **All five items are
+done.**
 
 ## Recommended order
 1. **Backend supervised by the app** (start, restart, status, orphan cleanup).
