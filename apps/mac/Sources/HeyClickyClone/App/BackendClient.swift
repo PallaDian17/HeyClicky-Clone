@@ -28,6 +28,29 @@ final class BackendClient {
         var targets: [Target]?
         var follow_ups: [String]?
         var clarify: Bool?
+        var walkthrough: WalkthroughGoal?
+    }
+    struct WalkthroughGoal: Decodable { var goal: String }
+
+    struct WalkthroughLogEntry: Encodable { var instruction: String; var outcome: String }
+    struct WalkthroughStepRequest: Encodable {
+        var goal: String
+        var appName: String?
+        var screenshot: String?
+        var elements: [AXElement]
+        var screenWithheld: String?
+        var log: [WalkthroughLogEntry]
+        var note: String?
+        var maxSteps: Int
+    }
+    struct WalkthroughTarget: Decodable { var element_id: Int?; var box: Box?; var label: String? }
+    struct WalkthroughStep: Decodable {
+        var say: String
+        var instruction: String
+        var target: WalkthroughTarget?
+        var done_when: String
+        var done: Bool
+        var summary: String?
     }
     struct InterviewTurn: Codable { var role: String; var text: String }
     struct InterviewRequest: Encodable { var turns: [InterviewTurn]; var existingNames: [String] }
@@ -59,6 +82,10 @@ final class BackendClient {
 
     func chat(_ request: ChatRequest) async throws -> ChatResponse {
         try await post("v1/chat", body: request)
+    }
+
+    func walkthroughStep(_ request: WalkthroughStepRequest) async throws -> WalkthroughStep {
+        try await post("v1/walkthrough/step", body: request)
     }
 
     private struct VoiceBody: Encodable { var voice: String; var language: String }

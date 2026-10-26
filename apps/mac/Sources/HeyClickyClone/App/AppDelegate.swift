@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var agents = AgentRuntime(store: AgentStore(), computerUse: computerUse, privacy: privacy, notch: notch.model, model: config.agentModel)
     private(set) lazy var dictation = DictationController(notch: notch.model, backend: backend, privacy: privacy)
     private(set) lazy var clickyTalk = ClickyPushToTalk(notch: notch.model, runtime: agents)
+    private(set) lazy var walkthrough = WalkthroughCoordinator(notch: notch.model, backend: backend, overlay: overlay, privacy: privacy)
     private(set) lazy var siteAwareness = SiteAwarenessMonitor(notch: notch.model, privacy: privacy, integrations: integrations, runtime: agents)
     private(set) lazy var integrations = IntegrationsHost(backend: backend)
     let characters = CharacterStore()
@@ -68,6 +69,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         siteAwareness.start()
+        walkthrough.speak = { [weak self] text in self?.talk.say(text) }
+        talk.onWalkthrough = { [weak self] goal in self?.walkthrough.start(goal: goal) }
+        talk.transcriptHook = { [weak self] text in self?.walkthrough.handle(transcript: text) ?? false }
         wireHotkey()
         startHotkeyWhenPermitted()
 
@@ -217,6 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if talk.phase != .idle { talk.cancel() }
             notch.model.toggle(.prompt)
         case .escape:
+            walkthrough.stop(say: nil)
             clickyTalk.cancel()
             talk.cancel()
             overlay.clear()
@@ -264,6 +269,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             switch url.lastPathComponent {
             case "partial": notch.model.openClicky(id); notch.model.pushToTalk = .init(agentID: id, text: text)
             default: notch.model.openClicky(id); clickyTalk.deliverSynthetic(text, to: id)
+            }
+        case "walk":
+            // `walk/start?goal=…` · `walk/next` · `walk/click` (pretend the target was clicked) · `walk/say?text=…` · `walk/stop`
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let text = items.first(where: { $0.name == "text" || $0.name == "goal" })?.value
+            switch url.lastPathComponent {
+            case "start": walkthrough.start(goal: text ?? "Export this document as a PDF")
+            case "next": _ = walkthrough.handle(transcript: "continue")
+            case "click": walkthrough.debugClickTarget()
+            case "say": _ = walkthrough.handle(transcript: text ?? "continue")
+            case "stop": walkthrough.stop(say: "Okay, stopping here.")
+            default: break
             }
         case "hotkey":
             // `hotkey/status` logs whether the event tap is running and enabled, and the Accessibility trust; `hotkey/restart` recreates the tap.

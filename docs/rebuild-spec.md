@@ -224,6 +224,46 @@ again. What changed:
   second of the chord; a synthetic test waited 1.5 s, which is why it never
   showed.
 
+### 3.14 Walkthrough mode — built 2026-10-27
+Website gap #1 (`docs/website-gap-analysis.md`): step-by-step teaching with
+click-to-advance. `Talk/WalkthroughCoordinator.swift`,
+`apps/backend/src/routes/walkthrough.ts`.
+- **Starting one**: the chat model decides. A "how do I…" / "walk me through…"
+  / "show me how to…" question that takes several actions in the app on screen
+  comes back with `walkthrough.goal` (and one spoken sentence, no steps); the
+  app starts the walkthrough with that goal. A single-action question still
+  gets a normal answer with a target. Debug: `walk/start?goal=…`.
+- **One step at a time**: every step is a fresh look — screenshot + element
+  list (privacy guard applies) + the **log of completed steps** (instruction +
+  outcome) + an optional note — sent to `POST /v1/walkthrough/step`, which
+  returns ONE step: `say` (spoken), `instruction` (≤8 words, shown in the
+  notch), `target` (element_id or normalized box), `done_when` (`click` or
+  `manual`), `done` + `summary`. The prompt forbids repeating a completed step
+  or sending the user back to a page they already left. **Up to 15 steps**
+  (the backend forces `done` past the cap; the app also caps model calls at 40).
+- **Click-to-advance**: the target is ringed on screen (`PointingOverlayManager`)
+  and spoken; a global mouse monitor watches the next click. Inside the target
+  (+10 pt) → logged as "clicked <label>", the app waits 1.2 s for the page to
+  settle, then asks for the next step. Elsewhere → "That wasn't the spot. Let me
+  look again…" and a re-plan from the current screen with a note saying where
+  the click landed, so a step done another way is not repeated. `manual` steps
+  (typing, reading, another app) wait for **Next** or a spoken "continue".
+- **Voice while it runs**: the talk chord and the Ask field go to the
+  walkthrough first (`TalkCoordinator.transcriptHook`): "continue / next / done /
+  okay" advances, "stop / cancel" ends it, anything else is a question that
+  re-plans with the note "the user said: …". Esc stops. Steps are spoken through
+  the talk voice (`TalkCoordinator.say`); the voice's done callback no longer
+  flips the notch back to the thread while a walkthrough is up.
+- **Notch** (`NotchState.walkthrough`): "Walkthrough · step 3 of 15", the goal,
+  the instruction in bold, a status line, Next (manual steps) and Stop; the
+  cursor companion shows the instruction beside the pointer. The done state
+  shows the summary and closes after 15 s.
+- Verified live in TextEdit ("Save this document as a PDF"): step 1 was
+  "Press Command–Tab once" because this window was in front (manual), then
+  "Click File in the menu bar" → real click → "Click Export as PDF…" → real
+  click → "Click Save", each ringed on screen and advanced by the click.
+  One step request retries once (the model endpoint 503'd on the first try).
+
 ### 3.2 Talk mode
 - Trigger: global modifier double-tap (default: double-tap Control) or hold
   Fn; configurable with a shortcut recorder. Needs a CGEvent tap and

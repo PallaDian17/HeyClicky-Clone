@@ -13,7 +13,9 @@ page is open, speak, release to send. The mascot button shows the corkboard
 home: the selected Clicky's card (Needs you / Done / Working, Open <file>,
 Full report) with the others as sticky notes; the chat icon shows the talk
 thread, the gear shows settings inside the panel, and an "Update app" pill
-appears when an update is found. On a known site in your browser (LinkedIn,
+appears when an update is found. Ask "how do I…" about something that takes a few steps and Dicky walks you
+through it one step at a time, ringing each thing to click and moving on when
+you click it (up to 15 steps, Esc stops). On a known site in your browser (LinkedIn,
 GitHub, Notion, Google Docs…) a bar offers the connector and three things a
 Clicky could do there, never on pages the privacy guard withholds. Hold ⌃ Control + ⌥ Option,
 speak, lasso anything while you hold; the answer is read aloud, shown as a

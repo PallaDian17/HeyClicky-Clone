@@ -41,6 +41,10 @@ final class TalkCoordinator {
     /// Routes a hand-off to an agent. Receives the task, the named helper if any,
     /// and the screenshot (nil when withheld). Returns the agent's name, or nil if none took it.
     var onHandoff: ((_ task: String, _ agentHint: String?, _ screenshotJPEG: Data?) -> String?)?
+    /// The model decided the question is a multi-step task: start walkthrough mode with this goal.
+    var onWalkthrough: ((String) -> Void)?
+    /// Gets every transcript / typed question first; returns true when it consumed it (a running walkthrough).
+    var transcriptHook: ((String) -> Bool)?
 
     init(notch: NotchViewModel, backend: BackendClient, overlay: PointingOverlayManager, privacy: PrivacyMonitor) {
         self.notch = notch
@@ -122,12 +126,26 @@ final class TalkCoordinator {
                 notch.set(.notice("Didn't catch that. Hold ⌃⌥ and try again."), autoDismissAfter: 4)
                 return
             }
+            if box == nil, let transcriptHook, transcriptHook(transcript) {
+                phase = .idle
+                region.dismiss(notify: false)
+                return
+            }
             await runTurn(transcript: transcript, region: box)
+        }
+    }
+
+    /// Speak a sentence through the talk voice (walkthrough steps).
+    func say(_ text: String) {
+        Task { @MainActor in
+            do { try await ensureVoice() } catch { return }
+            if voice.isUsable { phase = .speaking; voice.cancelResponse(); voice.speak(text) }
         }
     }
 
     /// Typed question (prompt box, Ask field, chips, debug URL). Reuses a recent lasso.
     func ask(_ text: String) {
+        if let transcriptHook, transcriptHook(text) { return }
         if phase != .idle { cancelTurnKeepThread() }
         dismissTask?.cancel()
         phase = .thinking
@@ -220,6 +238,14 @@ final class TalkCoordinator {
                 }
             }
 
+            if let goal = reply.walkthrough?.goal, reply.clarify != true, let onWalkthrough {
+                Log.app.info("walkthrough requested: \(goal.prefix(100), privacy: .public)")
+                thread.messages.append(.init(role: .assistant, text: replyText))
+                thread.status = nil
+                phase = .idle
+                onWalkthrough(goal)
+                return
+            }
             thread.messages.append(.init(role: .assistant, text: replyText))
             thread.chips = reply.follow_ups ?? []
             if let box, context.withheld == nil {
@@ -376,7 +402,7 @@ final class TalkCoordinator {
             guard let self, phase == .speaking else { return }
             phase = .idle
             thread.status = nil
-            showThread(dismissAfter: 25)
+            if case .conversation = notch.state { showThread(dismissAfter: 25) }
         }
         voice.onError = { [weak self] message in
             guard let self else { return }

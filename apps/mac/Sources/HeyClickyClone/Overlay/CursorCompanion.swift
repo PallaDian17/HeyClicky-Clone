@@ -87,6 +87,8 @@ final class CursorCompanionManager {
             case "Speaking…": model.state = .speaking("")
             default: model.state = Self.mode == .always ? .idle : .hidden
             }
+        case .walkthrough(let w):
+            model.state = w.instruction.isEmpty ? .thinking : .speaking(w.instruction)
         case .idle, .prompt, .suggestions, .home, .settings, .clickys, .clicky, .site:
             model.state = Self.mode == .always ? .idle : .hidden
         }

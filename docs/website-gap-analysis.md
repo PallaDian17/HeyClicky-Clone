@@ -13,7 +13,7 @@ Legend: ❌ not built · 🟡 partial · ✅ have it · ⏸ paused upstream too
 
 | # | HeyClicky (where) | Hi Dicky today | Status |
 |---|---|---|---|
-| 1 | **Walkthroughs**: step-by-step teaching up to 15 steps; detects when you click where it told you and advances; keeps a log of done steps; waits for slow pages (1.0.26, 1.0.48, 1.0.53). This is the homepage's core promise ("draws on your screen and teaches you"). | One answer with numbered markers; no multi-step turns, no click-to-advance | ❌ |
+| 1 | **Walkthroughs**: step-by-step teaching up to 15 steps; detects when you click where it told you and advances; keeps a log of done steps; waits for slow pages (1.0.26, 1.0.48, 1.0.53). This is the homepage's core promise ("draws on your screen and teaches you"). | **Built 2026-10-27** (spec §3.14): one step per fresh look at the screen, log of done steps, ring on the target, click-to-advance, Next / "continue" for manual steps, up to 15 | ✅ |
 | 2 | **Draws in 2D and 3D**: circles, points and sketches while talking; explanation cards with real photos; a draggable **3D model** for real things (engine, molecule, building), click a part to ask (1.1.1). | Markers, underlines, rings; no photo cards, no 3D | ❌ |
 | 3 | **One brain / memory**: remembers earlier screens in the conversation and conversations day to day; PROFILE.md (habits) + VOLATILE.md (current project) injected into voice and agents (1.0.33, 1.1.1). | Talk history lives for the session only; Clickys have persona notes but nothing is learned about *you* | ❌ |
 | 4 | **Whole-document understanding**: a PDF, file or web page is read entirely, not just what is on screen (1.0.47). | Accessibility harvest of the visible window | ❌ |
@@ -56,9 +56,7 @@ Keychain for tokens; privacy guard (ours goes further: withheld screens,
 redaction).
 
 ## Recommended order (value for a personal build)
-1. **Walkthrough mode** (#1): multi-step guided turns with click-to-advance —
-   the homepage's headline, and the one thing the recordings show that we still
-   answer in a single shot.
+1. ~~**Walkthrough mode** (#1)~~ — built 2026-10-27.
 2. **Memory of you** (#3): PROFILE.md + VOLATILE.md learned from talk and
    agents, injected into the voice prompt and every Clicky.
 3. **Whole-document reading** (#4): when the frontmost window is a PDF, a

@@ -168,6 +168,40 @@ struct NotchRootView: View {
             SettingsPanelView(model: model).transition(.opacity)
         case .site(let offer):
             SiteBarView(model: model, offer: offer).transition(.opacity)
+        case .walkthrough(let w):
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    ClickyCharacterView(character: model.character, mood: w.done ? .happy : .awake, size: 22, animated: false)
+                    Text(w.done ? "Walkthrough · done" : "Walkthrough · step \(w.step) of \(w.maxSteps)")
+                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.8))
+                    Spacer()
+                    Text(w.goal).font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).lineLimit(1).frame(maxWidth: 240, alignment: .trailing)
+                }
+                Text(w.instruction.isEmpty ? "…" : w.instruction)
+                    .font(.system(size: w.done ? 13 : 15, weight: w.done ? .regular : .bold))
+                    .lineLimit(4).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    if let status = w.status {
+                        HStack(spacing: 6) { ThinkingDots(); Text(status).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)) }
+                    }
+                    Spacer()
+                    if w.needsNext {
+                        Button { model.onWalkthroughNext?() } label: {
+                            Text("Next").font(.system(size: 11, weight: .bold)).padding(.horizontal, 12).padding(.vertical, 5).background(Capsule().fill(Color.blue))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Button { model.onWalkthroughStop?() } label: {
+                        Text(w.done ? "Close" : "Stop").font(.system(size: 11, weight: .semibold)).padding(.horizontal, 10).padding(.vertical, 5).background(Capsule().fill(.white.opacity(0.12)))
+                    }
+                    .buttonStyle(.plain)
+                }
+                if !w.done {
+                    Text("Hold ⌃⌥ and say \"continue\" or ask a question · Esc stops").font(.system(size: 10)).foregroundStyle(.white.opacity(0.4))
+                }
+            }
+            .padding(.top, 4)
+            .transition(.opacity)
         case .clickys:
             if let app = model.app { ClickyListView(model: model, runtime: app.agents, store: app.agents.store).transition(.opacity) }
         case .clicky(let id):

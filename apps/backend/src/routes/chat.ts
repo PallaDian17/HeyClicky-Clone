@@ -49,6 +49,8 @@ export type ChatResponse = {
   follow_ups: string[];
   /** True when the assistant is asking what to do rather than answering (e.g. a circled region with no words). */
   clarify: boolean;
+  /** Set when the user asked to be walked through a multi-step task on screen; the app starts walkthrough mode with this goal. */
+  walkthrough: { goal: string } | null;
 };
 
 const responseSchema = {
@@ -90,8 +92,14 @@ const responseSchema = {
     },
     follow_ups: { type: "array", items: { type: "string" } },
     clarify: { type: "boolean" },
+    walkthrough: {
+      type: ["object", "null"],
+      additionalProperties: false,
+      properties: { goal: { type: "string" } },
+      required: ["goal"],
+    },
   },
-  required: ["text", "element_id", "box", "handoff", "targets", "follow_ups", "clarify"],
+  required: ["text", "element_id", "box", "handoff", "targets", "follow_ups", "clarify", "walkthrough"],
 };
 
 function describeElements(req: ChatRequest): string {
@@ -153,8 +161,9 @@ chatRoute.post("/", async (c) => {
       .slice(0, 6);
     const follow_ups = (value.follow_ups ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 2);
     const clarify = Boolean(value.clarify);
-    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} region=${req.region ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} target=${element_id ?? (box ? "box" : "none")} targets=${targets.length} followups=${follow_ups.length} clarify=${clarify} handoff=${handoff ? "yes" : "no"}`);
-    return c.json({ text: value.text, element_id, box, handoff, targets, follow_ups, clarify, usage });
+    const walkthrough = value.walkthrough && value.walkthrough.goal.trim() && !clarify ? { goal: value.walkthrough.goal.trim() } : null;
+    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} region=${req.region ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} target=${element_id ?? (box ? "box" : "none")} targets=${targets.length} followups=${follow_ups.length} clarify=${clarify} handoff=${handoff ? "yes" : "no"} walkthrough=${walkthrough ? "yes" : "no"}`);
+    return c.json({ text: value.text, element_id, box, handoff, targets, follow_ups, clarify, walkthrough, usage });
   } catch (err) {
     const status = err instanceof OpenAIError ? 502 : 500;
     console.error("[chat] failed:", err);
