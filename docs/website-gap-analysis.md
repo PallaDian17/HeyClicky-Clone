@@ -16,7 +16,7 @@ Legend: ❌ not built · 🟡 partial · ✅ have it · ⏸ paused upstream too
 | 1 | **Walkthroughs**: step-by-step teaching up to 15 steps; detects when you click where it told you and advances; keeps a log of done steps; waits for slow pages (1.0.26, 1.0.48, 1.0.53). This is the homepage's core promise ("draws on your screen and teaches you"). | **Built 2026-10-27** (spec §3.14): one step per fresh look at the screen, log of done steps, ring on the target, click-to-advance, Next / "continue" for manual steps, up to 15 | ✅ |
 | 2 | **Draws in 2D and 3D**: circles, points and sketches while talking; explanation cards with real photos; a draggable **3D model** for real things (engine, molecule, building), click a part to ask (1.1.1). | Markers, underlines, rings; no photo cards, no 3D | ❌ |
 | 3 | **One brain / memory**: remembers earlier screens in the conversation and conversations day to day; PROFILE.md (habits) + VOLATILE.md (current project) injected into voice and agents (1.0.33, 1.1.1). | **Built 2026-10-27** (spec §3.15): PROFILE.md + VOLATILE.md learned from talk and Clicky turns, in Setup → Memory, injected into chat, voice and every turn | ✅ |
-| 4 | **Whole-document understanding**: a PDF, file or web page is read entirely, not just what is on screen (1.0.47). | Accessibility harvest of the visible window | ❌ |
+| 4 | **Whole-document understanding**: a PDF, file or web page is read entirely, not just what is on screen (1.0.47). | **Built 2026-10-27** (spec §3.16): the named file (PDF pages, text, RTF, Word), else the window's whole accessibility text, else a public fetch of the page; ≤40k chars in the chat request | ✅ |
 | 5 | **HeyClicky drive**: from talk, with your yes, it moves the mouse and types while you watch; move the mouse, talk or press Escape to take back control (1.1.1). Earlier: realtime computer use by voice ("open my Stripe dashboard"). | Computer use only inside agent turns, behind a Setup toggle; no live hand-back | 🟡 |
 | 6 | **Chrome extension**: agents work in your own signed-in Chrome in their own tab group; "Install for me" (1.1.1). | cua-driver drives a separate browser window | ❌ |
 | 7 | **Captions** at the bottom of the screen while it talks; typed questions that get a drawing answer as captions (1.1.1). | Words only in the notch thread | ❌ |
@@ -58,8 +58,7 @@ redaction).
 ## Recommended order (value for a personal build)
 1. ~~**Walkthrough mode** (#1)~~ — built 2026-10-27.
 2. ~~**Memory of you** (#3)~~ — built 2026-10-27.
-3. **Whole-document reading** (#4): when the frontmost window is a PDF, a
-   document or a web page, read all of it.
+3. ~~**Whole-document reading** (#4)~~ — built 2026-10-27.
 4. **Screen-aware dictation** (#9) + hands-free dictation + a shortcut recorder
    (#10, #11).
 5. **Drive from talk** (#5): voice-triggered computer use with the live

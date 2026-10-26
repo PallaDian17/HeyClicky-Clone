@@ -29,6 +29,10 @@ export const ChatRequest = z.object({
   regionCrop: z.string().max(4_000_000).optional(),
   /** The app's notes about the user (PROFILE.md + VOLATILE.md), already redacted. */
   memory: z.string().max(4000).optional(),
+  /** Whole-document understanding: the full text of the document in the frontmost window. */
+  document: z
+    .object({ title: z.string().max(300).nullable().optional(), kind: z.string().max(20), text: z.string().max(60_000), truncated: z.boolean() })
+    .optional(),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
 
@@ -130,6 +134,14 @@ export function buildMessages(req: ChatRequest): ChatMessage[] {
     parts.push({ type: "text", text: "(No screenshot is available for this turn.)" });
   }
   parts.push({ type: "text", text: describeElements(req) });
+  if (req.document && !req.screenWithheld) {
+    const d = req.document;
+    const what = d.kind === "pdf" ? "PDF" : d.kind === "web" ? "web page" : "document";
+    parts.push({
+      type: "text",
+      text: `The full text of the ${what} in the frontmost window${d.title ? ` ("${d.title}")` : ""}, including the parts the screenshot does not show${d.truncated ? " (long; the middle was left out)" : ""}. Use it to answer questions about the whole ${what}, and say which part you are drawing on when it is not on screen. Targets can only point at things that are on screen.\n\n<document>\n${d.text}\n</document>`,
+    });
+  }
   if (req.region && !req.screenWithheld) {
     const r = req.region;
     parts.push({
@@ -164,7 +176,7 @@ chatRoute.post("/", async (c) => {
     const follow_ups = (value.follow_ups ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 2);
     const clarify = Boolean(value.clarify);
     const walkthrough = value.walkthrough && value.walkthrough.goal.trim() && !clarify ? { goal: value.walkthrough.goal.trim() } : null;
-    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} region=${req.region ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} memory=${req.memory ? "yes" : "no"} target=${element_id ?? (box ? "box" : "none")} targets=${targets.length} followups=${follow_ups.length} clarify=${clarify} handoff=${handoff ? "yes" : "no"} walkthrough=${walkthrough ? "yes" : "no"}`);
+    console.log(`[chat] user=${c.var.user.id} ${Date.now() - started}ms elements=${req.elements.length} screenshot=${req.screenshot ? "yes" : "no"} region=${req.region ? "yes" : "no"} withheld=${req.screenWithheld ? "yes" : "no"} memory=${req.memory ? "yes" : "no"} document=${req.document ? `${req.document.kind}:${req.document.text.length}c` : "no"} target=${element_id ?? (box ? "box" : "none")} targets=${targets.length} followups=${follow_ups.length} clarify=${clarify} handoff=${handoff ? "yes" : "no"} walkthrough=${walkthrough ? "yes" : "no"}`);
     return c.json({ text: value.text, element_id, box, handoff, targets, follow_ups, clarify, walkthrough, usage });
   } catch (err) {
     const status = err instanceof OpenAIError ? 502 : 500;

@@ -51,6 +51,7 @@ struct ConversationModel: Equatable {
     var chips: [String] = []
     var status: String?            // "Listening…", "Thinking…", "Speaking…"
     var canClear = false           // annotations on screen
+    var note: String?              // "Read the whole PDF · 3,200 words"
     var hint = "Hold ⌃ Control + ⌥ Option to talk"
 }
 

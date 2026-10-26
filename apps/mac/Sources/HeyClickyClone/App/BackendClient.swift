@@ -16,7 +16,10 @@ final class BackendClient {
         var regionCrop: String?
         /// The app's notes about the user (PROFILE.md + VOLATILE.md).
         var memory: String?
+        /// The full text of the document in the frontmost window, beyond what the screenshot shows.
+        var document: DocumentBody?
     }
+    struct DocumentBody: Encodable { var title: String?; var kind: String; var text: String; var truncated: Bool }
     struct MemoryExchange: Encodable { var source: String; var user: String; var assistant: String }
     struct MemoryExtractRequest: Encodable { var profile: String; var volatile: String; var exchanges: [MemoryExchange] }
     struct MemoryExtractResponse: Decodable { var profile: String; var volatile: String; var changed: Bool }

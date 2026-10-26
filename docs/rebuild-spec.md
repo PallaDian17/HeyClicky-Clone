@@ -293,6 +293,37 @@ Website gap #3 (`docs/website-gap-analysis.md`). `Memory/MemoryStore.swift`,
 - Debug: `memory/show`, `memory/learn?text=&reply=`, `memory/flush`,
   `memory/forget`.
 
+### 3.16 Whole-document reading — built 2026-10-27
+Website gap #4 (`docs/website-gap-analysis.md`). `Capture/DocumentReader.swift`.
+- **What is read**, in order, during the talk context capture (in parallel with
+  the screenshot, own 2 s time budget, off the main thread):
+  1. **The file the window names** (`AXDocument`): PDFs page by page through
+     PDFKit ("--- page 4 of 5 ---" markers), text-like files raw, RTF / Word /
+     HTML through `NSAttributedString`.
+  2. **Everything the window's accessibility tree exposes** (`walkText`):
+     static text, text areas (the whole buffer, not the viewport), headings,
+     links, cells; deduplicated; secure fields skipped. Safari, editors and
+     most apps expose their full text this way.
+  3. **A public fetch of the page** for a Chromium browser whose tree shows no
+     web content (Chrome exposes the page only once an assistive client has
+     asked; it did after a probe set `AXEnhancedUserInterface`, and not
+     before). No cookies go with the request, so a signed-in page comes back as
+     its public face or not at all. `htmlToText` is a small dependency-free
+     stripper.
+- Caps: 40,000 characters (head ¾ + tail ¼ when longer, flagged `truncated`),
+  nothing under 300. The text is redacted and travels in the chat request's
+  `document` field; the backend adds it as a `<document>` block with the title
+  and kind and tells the model to say which part it drew on when it is not on
+  screen (targets stay on-screen only). The thread shows "Read the whole PDF ·
+  184 words". Setup → Talk has the toggle (`ClickyReadWholeDocument`, on).
+- Privacy: Chromium gives its URL on the window (`AXDocument`), not in the
+  tree, so the page URL from `BrowserURLProbe` now joins the privacy guard's
+  URL check; a withheld screen sends no document either.
+- Verified: a 5-page PDF open on page 1 in Preview — "Who runs the stall …?"
+  answered "On page 4, Mrs Okonkwo runs stall 17 …" (`docs/demo/harbor-lights.pdf`);
+  the repo page in Chrome — the last heading of the README named without
+  scrolling (1,773 words read).
+
 ### 3.2 Talk mode
 - Trigger: global modifier double-tap (default: double-tap Control) or hold
   Fn; configurable with a shortcut recorder. Needs a CGEvent tap and

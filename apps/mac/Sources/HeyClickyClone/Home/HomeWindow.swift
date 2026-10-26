@@ -140,6 +140,10 @@ struct HomeView: View {
             }
 
             section("Talk") {
+                Toggle("Read the whole document, not just what's on screen", isOn: Binding(get: { DocumentReader.isEnabled }, set: { DocumentReader.isEnabled = $0 }))
+                    .font(.callout)
+                Text("When you talk with a PDF, a document or a web page in front, Dicky also gets its full text (the file itself, or everything the window exposes), up to about 40,000 characters. Withheld on the same pages the privacy guard withholds.")
+                    .font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: 8) {
                     Text("Language").font(.caption)
                     Picker("", selection: $talkLanguage) {

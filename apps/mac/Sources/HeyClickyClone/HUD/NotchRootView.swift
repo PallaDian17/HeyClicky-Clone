@@ -228,6 +228,10 @@ struct NotchRootView: View {
                             if let status = c.status {
                                 HStack(spacing: 8) { ThinkingDots(); Text(status).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)) }
                             }
+                            if let note = c.note {
+                                HStack(spacing: 5) { Image(systemName: "doc.text").font(.system(size: 10)); Text(note).font(.system(size: 10)) }
+                                    .foregroundStyle(.white.opacity(0.45))
+                            }
                         }
                     }
                     .onChange(of: c.messages.count) { _, _ in if let last = c.messages.last { proxy.scrollTo(last.id, anchor: .bottom) } }

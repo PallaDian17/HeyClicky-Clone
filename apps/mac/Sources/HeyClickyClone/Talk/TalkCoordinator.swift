@@ -24,6 +24,7 @@ final class TalkCoordinator {
         var shot: ScreenCapture.Shot?
         var harvest: AXHarvest
         var withheld: PrivacyGuard.Reason?
+        var document: DocumentReader.DocumentText?
     }
     private var contextTask: Task<Context, Never>?
     private var lastContext: Context?
@@ -221,8 +222,15 @@ final class TalkCoordinator {
             screenWithheld: context.withheld?.label,
             region: box.map { .init(x: $0.minX, y: $0.minY, w: $0.width, h: $0.height) },
             regionCrop: crop?.jpegBase64,
-            memory: memory?()
+            memory: memory?(),
+            document: context.withheld == nil ? context.document.map { .init(title: $0.title, kind: $0.kind, text: PrivacyGuard.redact($0.text).text, truncated: $0.truncated) } : nil
         )
+        if let d = context.document, context.withheld == nil {
+            thread.note = "Read the whole \(d.kind == "pdf" ? "PDF" : d.kind == "web" ? "page" : "document") · \(d.words) words\(d.truncated ? ", trimmed" : "")"
+            Log.app.info("document context: kind=\(d.kind, privacy: .public) words=\(d.words) truncated=\(d.truncated) title=\(d.title ?? "-", privacy: .public)")
+        } else {
+            thread.note = nil
+        }
         do {
             let reply = try await backend.chat(request)
             guard !Task.isCancelled else { return }
@@ -380,18 +388,24 @@ final class TalkCoordinator {
 
     private func captureContext() async -> Context {
         let harvest = await Task.detached(priority: .userInitiated) { AccessibilityHarvester.harvestFrontmost() }.value
-        let verdict = privacy.assessFrontmost(windowTitle: harvest.windowTitle, urls: harvest.urls, hasSecureField: harvest.hasSecureField)
+        // Chromium does not expose the page to the tree, so the page URL comes from the window itself;
+        // it joins the privacy check like any other URL.
+        let pageURL = BrowserURLProbe.frontmostPageURL()
+        let verdict = privacy.assessFrontmost(windowTitle: harvest.windowTitle, urls: harvest.urls + (pageURL.map { [$0] } ?? []), hasSecureField: harvest.hasSecureField)
         if case .withhold(let reason) = verdict {
             return Context(shot: nil, harvest: harvest.withheld(), withheld: reason)
         }
+        // The whole document is read while the screenshot is taken; both are quick, the walk has its own time budget.
+        let documentTask = Task.detached(priority: .userInitiated) { DocumentReader.readFrontmost(pageURL: pageURL) }
         var shot: ScreenCapture.Shot?
         do { shot = try await ScreenCapture.capture() } catch {
             Log.app.notice("screenshot skipped: \(String(describing: error), privacy: .public)")
         }
+        let document = await documentTask.value
         if PrivacyMonitor.secureInputActive {
             return Context(shot: nil, harvest: harvest.withheld(), withheld: .passwordField)
         }
-        return Context(shot: shot, harvest: harvest, withheld: nil)
+        return Context(shot: shot, harvest: harvest, withheld: nil, document: document)
     }
 
     // MARK: - Voice plumbing

@@ -81,20 +81,20 @@ enum AccessibilityHarvester {
 
     // MARK: - AX helpers
 
-    private static func copyElement(_ element: AXUIElement, _ attribute: CFString) -> AXUIElement? {
+    static func copyElement(_ element: AXUIElement, _ attribute: CFString) -> AXUIElement? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success, let value else { return nil }
         guard CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
         return (value as! AXUIElement)
     }
 
-    private static func children(of element: AXUIElement) -> [AXUIElement]? {
+    static func children(of element: AXUIElement) -> [AXUIElement]? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &value) == .success else { return nil }
         return value as? [AXUIElement]
     }
 
-    private static func stringAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
+    static func stringAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success, let value else { return nil }
         if let s = value as? String { return s }
