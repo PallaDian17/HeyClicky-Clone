@@ -28,6 +28,7 @@ final class RegionSelectOverlayManager {
     private var panel: RegionPanel?
     private var canvas: RegionCanvasView?
     private var bar: NSHostingView<RegionActionBar>?
+    private var globalMonitor: Any?
 
     func arm(on screen: NSScreen? = NSScreen.main) {
         guard let screen else { return }
@@ -38,7 +39,41 @@ final class RegionSelectOverlayManager {
         bar?.isHidden = true
         panel?.ignoresMouseEvents = false
         panel?.orderFrontRegardless()
+        installGlobalMonitor()
         Log.hud.info("region overlay armed on \(screen.localizedName, privacy: .public)")
+    }
+
+    /// A real hand presses the mouse within a fraction of a second of the chord,
+    /// often before the overlay is up, so the mouse-down lands in the app
+    /// underneath and the overlay never sees the drag. A global monitor follows
+    /// a drag that is already in flight (from wherever it is when we see it) so
+    /// the stroke still gets drawn and the box still gets selected.
+    private func installGlobalMonitor() {
+        removeGlobalMonitor()
+        let mask: NSEvent.EventTypeMask = [.leftMouseDown, .leftMouseDragged, .leftMouseUp, .rightMouseDown, .rightMouseDragged, .rightMouseUp]
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] event in
+            Task { @MainActor in self?.handleGlobal(event) }
+        }
+    }
+
+    private func removeGlobalMonitor() {
+        if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
+        globalMonitor = nil
+    }
+
+    private func handleGlobal(_ event: NSEvent) {
+        guard let panel, let canvas, panel.isVisible, !panel.ignoresMouseEvents else { return }
+        let inWindow = panel.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let p = canvas.convert(inWindow, from: nil)
+        switch event.type {
+        case .leftMouseDown, .rightMouseDown:
+            canvas.beginStroke(at: p)
+        case .leftMouseDragged, .rightMouseDragged:
+            if canvas.isDragging { canvas.extendStroke(to: p) } else { canvas.beginStroke(at: p) }
+        case .leftMouseUp, .rightMouseUp:
+            canvas.endStroke(at: p)
+        default: break
+        }
     }
 
     /// The key came up: keep the overlay only if the user drew something.
@@ -50,6 +85,7 @@ final class RegionSelectOverlayManager {
     /// Stops taking the mouse but leaves the drawing visible (silent mode, after the key came up).
     func stopCapturing() {
         panel?.ignoresMouseEvents = true
+        removeGlobalMonitor()
     }
 
     func dismiss(notify: Bool = true) {
@@ -57,6 +93,7 @@ final class RegionSelectOverlayManager {
         canvas?.reset()
         bar?.isHidden = true
         panel?.ignoresMouseEvents = true
+        removeGlobalMonitor()
         panel?.orderOut(nil)
         if notify { onDismiss?() }
     }
@@ -187,23 +224,39 @@ final class RegionCanvasView: NSView {
         dim.isHidden = true
     }
 
-    override func mouseDown(with event: NSEvent) {
+    // The lasso is drawn while Control + Option are held, and AppKit delivers a
+    // Control-click as a RIGHT mouse click (that is how context menus work),
+    // so every button's down / drag / up must feed the same stroke. Before this,
+    // a real hand drew nothing while a synthetic plain-left drag worked.
+    override func rightMouseDown(with event: NSEvent) { mouseDown(with: event) }
+    override func rightMouseDragged(with event: NSEvent) { mouseDragged(with: event) }
+    override func rightMouseUp(with event: NSEvent) { mouseUp(with: event) }
+    override func otherMouseDown(with event: NSEvent) { mouseDown(with: event) }
+    override func otherMouseDragged(with event: NSEvent) { mouseDragged(with: event) }
+    override func otherMouseUp(with event: NSEvent) { mouseUp(with: event) }
+    override func menu(for event: NSEvent) -> NSMenu? { nil }
+
+    override func mouseDown(with event: NSEvent) { beginStroke(at: convert(event.locationInWindow, from: nil)) }
+    override func mouseDragged(with event: NSEvent) { extendStroke(to: convert(event.locationInWindow, from: nil)) }
+    override func mouseUp(with event: NSEvent) { endStroke(at: convert(event.locationInWindow, from: nil)) }
+
+    func beginStroke(at p: CGPoint) {
         reset()
         isDragging = true
-        points = [convert(event.locationInWindow, from: nil)]
+        points = [p]
         redrawStroke()
     }
 
-    override func mouseDragged(with event: NSEvent) {
+    func extendStroke(to p: CGPoint) {
         guard isDragging else { return }
-        points.append(convert(event.locationInWindow, from: nil))
+        points.append(p)
         redrawStroke()
     }
 
-    override func mouseUp(with event: NSEvent) {
+    func endStroke(at p: CGPoint) {
         guard isDragging else { return }
         isDragging = false
-        points.append(convert(event.locationInWindow, from: nil))
+        points.append(p)
         redrawStroke()
         var rect = points.reduce(CGRect.null) { $0.union(CGRect(origin: $1, size: .zero)) }
         guard rect.width > 14 || rect.height > 14 else { reset(); return }

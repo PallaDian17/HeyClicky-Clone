@@ -200,6 +200,30 @@ Recording item 5 (`docs/recording-gap-analysis.md` §4). `Site/SiteAwareness.swi
 - Setup → Integrations has the on/off toggle (`SiteAwarenessEnabled`, default
   on). Debug: `site/show?url=…` forces the bar, `site/reset` forgets answers.
 
+### 3.2d Hotkey event tap: Input Monitoring is required — found 2026-10-27
+The talk chord "did nothing" for a real hand while synthetic events worked
+minutes earlier. Diagnosis from the log: the keyboard tap was created fine
+(Accessibility granted, `trusted=true`) and then macOS kept disabling it
+(`tapDisabledByUserInput`, re-enabled by a watchdog, disabled again within
+2 s, same for a freshly created tap) — because **Input Monitoring was not
+granted** (`CGPreflightListenEventAccess() == false`; the Permissions window's
+"4 of 5"). On this macOS a keyboard tap without Input Monitoring lives for a
+few events, then dies, so the gesture works right after a relaunch and never
+again. What changed:
+- `HotkeyMonitor` runs a 2 s watchdog: re-enables a disabled tap, recreates it
+  when re-enabling does not stick, logs each step, and calls `onTapKeptDying`.
+- The app then checks the preflight and, once per session, shows a notch
+  notice ("turn on Input Monitoring for Hi Dicky") and opens Permissions. The
+  Permissions row no longer calls Input Monitoring a "fallback".
+- `hotkey/status` logs running / enabled / Accessibility / Input Monitoring /
+  secure input; `hotkey/restart` recreates the tap;
+  `hotkey/request-input-monitoring` asks the system (adds the app to the list).
+- The lasso also follows a drag that began before the overlay was armed
+  (global mouse monitor in `RegionSelectOverlayManager`), and accepts right /
+  other mouse buttons. A real hand presses the mouse within a fraction of a
+  second of the chord; a synthetic test waited 1.5 s, which is why it never
+  showed.
+
 ### 3.2 Talk mode
 - Trigger: global modifier double-tap (default: double-tap Control) or hold
   Fn; configurable with a shortcut recorder. Needs a CGEvent tap and
@@ -282,8 +306,9 @@ so there is one source of truth: waveform in the ring while listening (with a
 3.5 s hint "Talk, or circle anything to ask about it"), a spinner while
 thinking, the answer in a bubble next to the ring while speaking, a purple
 mic dot with the live transcript while dictating. Setup → Talk → Cursor
-tracker: while talking or dictating (default), always (an idle ring too, and
-agent steps and notices in the bubble), or off. The original's
+tracker: always (default since 2026-10-27 — the user expects to see the
+triangle at all times; an idle marker, agent steps and notices in the bubble),
+while talking or dictating, or off. The original's
 `BlueCursorView` / `CursorMessageBubbleView` were first read as the
 point-at-target overlay only; this is the mouse-following half.
 Debug: `cursor/demo?state=listening|thinking|speaking|dictating|idle|hidden&text=`,

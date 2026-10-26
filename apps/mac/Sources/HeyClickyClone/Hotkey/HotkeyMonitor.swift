@@ -71,9 +71,47 @@ final class HotkeyMonitor {
         self.tap = tap
         self.source = source
         isRunning = true
+        // macOS silently disables a tap whose callback was slow (a screenshot,
+        // a heavy layout) and the re-enable event does not always arrive, after
+        // which every gesture is dead with nothing in the log. Watch for it.
+        watchdog?.invalidate()
+        watchdog = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            guard let self, let tap = self.tap else { return }
+            if CGEvent.tapIsEnabled(tap: tap) { self.reenables = 0; return }
+            self.reenables += 1
+            if self.reenables >= 2 {
+                // Re-enabling did not stick: the system keeps turning this tap off.
+                // A fresh tap does stay up (a relaunch fixed it once), so make one.
+                Log.hotkey.notice("Event tap stays disabled after re-enabling; recreating it")
+                self.restart()
+                self.onTapKeptDying?()
+            } else {
+                CGEvent.tapEnable(tap: tap, enable: true)
+                Log.hotkey.notice("Event tap was disabled by the system; re-enabled")
+            }
+        }
     }
 
+    private var watchdog: Timer?
+    private var reenables = 0
+    /// The system keeps disabling the tap even after a fresh one: on this macOS
+    /// that means Input Monitoring is missing. The app tells the user.
+    var onTapKeptDying: (() -> Void)?
+
+    /// Tear the tap down and build a new one (same callback, same run loop).
+    func restart() {
+        stop()
+        chordDown = false; chordHolding = false; modifierDown = false; dictationDown = false; holding = false
+        reenables = 0
+        do { try start(); Log.hotkey.info("Event tap recreated") } catch { Log.hotkey.error("Event tap recreate failed: \(String(describing: error), privacy: .public)") }
+    }
+
+    /// For the status route and Setup: is the tap up and enabled right now?
+    var isTapEnabled: Bool { tap.map { CGEvent.tapIsEnabled(tap: $0) } ?? false }
+
     func stop() {
+        watchdog?.invalidate()
+        watchdog = nil
         if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
         if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
         tap = nil
@@ -84,6 +122,7 @@ final class HotkeyMonitor {
     private func handle(type: CGEventType, event: CGEvent) {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            Log.hotkey.notice("Event tap disabled (\(type == .tapDisabledByTimeout ? "timeout" : "user input", privacy: .public)); re-enabling")
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
         case .keyDown:
             if event.getIntegerValueField(.keyboardEventKeycode) == 53 { // Escape

@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionsWindow: PermissionsWindowController?
     private var signInWindow: SignInWindowController?
     private var hotkeyRetryTimer: Timer?
+    private var warnedInputMonitoring = false
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -173,6 +174,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func wireHotkey() {
+        hotkey.onTapKeptDying = { [weak self] in
+            guard let self, !CGPreflightListenEventAccess() else { return }
+            Log.hotkey.notice("Input Monitoring is not granted; the talk keys cannot work")
+            if !self.warnedInputMonitoring {
+                self.warnedInputMonitoring = true
+                self.notch.model.set(.notice("Hi Dicky can't hear ⌃ Control + ⌥ Option: turn on Input Monitoring for Hi Dicky in System Settings"), autoDismissAfter: 15)
+                self.showPermissions()
+            }
+        }
         hotkey.onEvent = { [weak self] event in
             self?.handleHotkey(event)
         }
@@ -255,6 +265,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case "partial": notch.model.openClicky(id); notch.model.pushToTalk = .init(agentID: id, text: text)
             default: notch.model.openClicky(id); clickyTalk.deliverSynthetic(text, to: id)
             }
+        case "hotkey":
+            // `hotkey/status` logs whether the event tap is running and enabled, and the Accessibility trust; `hotkey/restart` recreates the tap.
+            if url.lastPathComponent == "restart" { hotkey.restart() }
+            Log.hotkey.info("hotkey status: running=\(self.hotkey.isRunning) tapEnabled=\(self.hotkey.isTapEnabled) trusted=\(AXIsProcessTrusted()) inputMonitoring=\(CGPreflightListenEventAccess()) secureInput=\(PrivacyMonitor.secureInputActive)")
+            if url.lastPathComponent == "request-input-monitoring" { Log.hotkey.info("request input monitoring -> \(CGRequestListenEventAccess())") }
         case "site":
             // `site/show?url=https://www.linkedin.com/feed/` forces the bar; `site/reset` forgets No / Not now.
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []

@@ -22,7 +22,7 @@ final class CursorCompanionManager {
         }
     }
     static var mode: Mode {
-        get { Mode(rawValue: UserDefaults.standard.string(forKey: modeKey) ?? "") ?? .talk }
+        get { Mode(rawValue: UserDefaults.standard.string(forKey: modeKey) ?? "") ?? .always }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: modeKey) }
     }
 

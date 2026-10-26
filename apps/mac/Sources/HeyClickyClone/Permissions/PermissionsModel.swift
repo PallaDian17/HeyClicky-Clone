@@ -23,7 +23,7 @@ final class PermissionsModel: ObservableObject {
         var reason: String {
             switch self {
             case .accessibility: return "Hotkey gestures and pointing at things on screen."
-            case .inputMonitoring: return "Fallback for the hotkey tap on some macOS versions."
+            case .inputMonitoring: return "Required: without it macOS switches the hotkey listener off within seconds, and ⌃⌥ does nothing."
             case .screenRecording: return "Seeing your screen when you press the hotkey. Never in the background."
             case .microphone: return "Talking to it."
             case .speech: return "On-device transcription fallback."
